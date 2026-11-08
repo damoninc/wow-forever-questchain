@@ -12,7 +12,7 @@ end
 local model = ns.Chain.New(source)
 local window, view, selectedId
 local browseIndex, browseBuilding, browsing
-local browse = { kind = "zones", page = 1, offset = 0, collapsed = {} }
+local browse = { kind = "zones", page = 1, offset = 0 }
 local rewardCatalog, rewardBuilding, rewardState
 local searchResults, searchMessage, searchOffset = {}, "Search by name or quest ID.", 0
 local player = {
@@ -21,6 +21,10 @@ local player = {
     isReady = C_QuestLog.ReadyForTurnIn,
     isCompleted = C_QuestLog.IsQuestFlaggedCompleted,
 }
+
+local function questLogStatus(id)
+    return ns.Chain.QuestLogStatus(id, player)
+end
 
 local function known(value)
     return { state = "known", value = value }
@@ -218,45 +222,27 @@ local function showBrowse(offset)
     elseif not browse.category then
         message = "Pick a category to see its quests and chains."
     else
-        local rows = browseIndex:Rows(browse.kind, browse.category, browse.collapsed, function(id)
-            return browse.hideCompleted and player.isCompleted(id) and not player.isActive(id)
-        end)
+        local filter = browse.completedFilter
+        local rows = browseIndex:Rows(browse.kind, browse.category, filter, questLogStatus)
         local page
         page, pageNumber, pageCount = ns.Browse.Page(rows, browse.page)
         browse.page = pageNumber
         if #rows == 0 then
-            message = "No matching quests."
+            message = filter == "completed" and "No completed quests in this category." or "No matching quests."
         end
         for _, row in ipairs(page) do
             local group, step = row.group, row.step
-            if step then
-                local quest = step.quest
-                local detail
-                if browse.kind == "dungeons" then
-                    if step.dungeon then
-                        detail = step.dungeon.key == browse.category and "Dungeon quest" or step.dungeon.name
-                    else
-                        detail = "Outside dungeon"
-                    end
-                end
-                entries[#entries + 1] = {
-                    title = quest.title, indent = not group.standalone,
-                    id = quest.id, level = quest.level, detail = detail,
-                    action = function() openQuest(quest.id, step.destination) end,
-                }
-            else
-                local collapsed = browse.collapsed[group.key]
-                entries[#entries + 1] = {
-                    title = (collapsed and "+ " or "- ") .. group.title, heading = true, level = group.level,
-                    action = function()
-                        browse.collapsed[group.key] = not collapsed
-                        showBrowse(window:ResultOffset())
-                    end,
-                }
-            end
+            local quest = step.quest
+            local detail = group.standalone and (browse.kind == "dungeons" and "Dungeon quest" or "Quest")
+                or ("Chain  /  %d/%d complete"):format(row.completed, #group.steps)
+            entries[#entries + 1] = {
+                title = group.title, id = group.standalone and quest.id or nil,
+                level = group.level, detail = detail, logStatus = row.status,
+                action = function() openQuest(quest.id, step.destination) end,
+            }
         end
     end
-    window:ShowBrowse(entries, message, offset, pageNumber, pageCount, browse.kind == "dungeons")
+    window:ShowBrowse(entries, message, offset, pageNumber, pageCount)
 end
 
 local function showRewardCatalog(offset)
@@ -374,7 +360,7 @@ local function getWindow()
     if not window then
         window = ns.Window.New({
             search = search, openQuest = openQuest, selectStep = selectStep, setBrowseMode = setBrowseMode,
-            questLogStatus = function(id) return ns.Chain.QuestLogStatus(id, player) end,
+            questLogStatus = questLogStatus,
             browseKinds = browseKinds,
             browseKind = function() return browse.kind end,
             browseCategory = function() return browse.category end,
@@ -391,8 +377,9 @@ local function getWindow()
                     showBrowse(0)
                 end
             end,
-            hideCompleted = function(checked)
-                browse.hideCompleted = checked
+            setCompletedFilter = function(filter)
+                browse.completedFilter, browse.page = filter, 1
+                window:SetCompletedFilter(filter)
                 showBrowse(0)
             end,
             browsePage = function(step)

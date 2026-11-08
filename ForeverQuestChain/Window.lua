@@ -20,7 +20,7 @@ local statuses = {
     ready = { "Ready to turn in", 0.98, 0.81, 0.43 },
     active = { "In progress", 0.46, 0.78, 0.98 },
     blocked = { "Blocked", 0.95, 0.56, 0.48 },
-    unstarted = { "Unstarted", 0.67, 0.69, 0.71 },
+    unstarted = { "Not started", 0.67, 0.69, 0.71 },
 }
 local itemFallbackIcon = 134400
 local cardEdge = { edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
@@ -363,10 +363,19 @@ function Window.New(callbacks)
     hideCompleted:SetSize(22, 22)
     hideCompleted.Text:SetText("Hide completed")
     hideCompleted.Text:SetTextColor(unpack(colors.muted))
-    hideCompleted:SetScript("OnClick", function(self) callbacks.hideCompleted(self:GetChecked()) end)
+    hideCompleted:SetScript("OnClick", function(self)
+        callbacks.setCompletedFilter(self:GetChecked() and "incomplete" or nil)
+    end)
+    local completedOnly = false
+    local showCompleted = makeControl(catalog, "Show completed", 130)
+    showCompleted:SetPoint("TOPLEFT", 680, -48)
+    showCompleted:SetScript("OnClick", function()
+        callbacks.setCompletedFilter(not completedOnly and "completed" or nil)
+    end)
     kindMenu:Hide()
     categoryMenu:Hide()
     hideCompleted:Hide()
+    showCompleted:Hide()
 
     local resultBody, resultScroll, resultWidth, resultPanel, resultTitle =
         panel(catalog, 0, resultsTop, catalogWidth, bodyHeight - resultsTop, "SEARCH RESULTS")
@@ -376,7 +385,7 @@ function Window.New(callbacks)
     label(resultPanel, "GameFontNormalSmall", colors.muted, idX + 10, 37, 100, "Quest ID")
     label(resultPanel, "GameFontNormalSmall", colors.muted, levelX + 10, 37, 90, "Level")
     local zoneTitle = label(resultPanel, "GameFontNormalSmall", colors.muted, zoneX + 10, 37, statusX - zoneX - 8, "Zone")
-    label(resultPanel, "GameFontNormalSmall", colors.accent, statusX + 10, 37, resultWidth - statusX, "Quest log")
+    local statusTitle = label(resultPanel, "GameFontNormalSmall", colors.accent, statusX + 10, 37, resultWidth - statusX, "Quest log")
     local nextPage = makeControl(resultPanel, "Next page", 88)
     nextPage:SetPoint("TOPRIGHT", -25, -5)
     local previousPage = makeControl(resultPanel, "Previous page", 101)
@@ -470,6 +479,7 @@ function Window.New(callbacks)
         kindMenu:SetShown(enabled)
         categoryMenu:SetShown(enabled)
         hideCompleted:SetShown(enabled)
+        showCompleted:SetShown(enabled)
         if enabled then
             browseMode:Disable()
             searchMode:Enable()
@@ -478,9 +488,15 @@ function Window.New(callbacks)
             searchMode:Disable()
         end
         resultTitle:SetText(enabled and "BROWSE QUESTS" or "SEARCH RESULTS")
-        zoneTitle:SetShown(not enabled)
-        zoneTitle:SetText("Zone")
+        zoneTitle:SetText(enabled and "Type / Progress" or "Zone")
+        statusTitle:SetText(enabled and "Status" or "Quest log")
         if not enabled and catalog:IsShown() then search:SetFocus() end
+    end
+
+    function window:SetCompletedFilter(filter)
+        completedOnly = filter == "completed"
+        hideCompleted:SetChecked(filter == "incomplete")
+        showCompleted:SetText(completedOnly and "Show all" or "Show completed")
     end
 
     function window:SetBrowseCategories(options, prompt)
@@ -545,18 +561,14 @@ function Window.New(callbacks)
             row.logStatus = label(row, "GameFontHighlight", colors.muted, statusX, 7, resultWidth - statusX - 8, "")
             resultRows[index] = row
         end
-        local inset = entry.indent and 16 or 0
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -y)
-        row.title:SetPoint("TOPLEFT", 8 + inset, -7)
-        row.title:SetWidth(idX - inset - 16)
+        row.title:SetWidth(idX - 16)
         row.title:SetText(entry.title)
-        row.title:SetTextColor(unpack(entry.heading and colors.accent or colors.text))
-        row.background:SetColorTexture(unpack(entry.heading and colors.selected or colors.card))
         row.questId:SetText(entry.id and ("#" .. entry.id) or "")
         row.level:SetText(entry.level and tostring(entry.level) or "")
         row.meta:SetText(entry.detail or "")
-        local status = entry.id and statuses[callbacks.questLogStatus(entry.id)]
+        local status = statuses[entry.logStatus or (entry.id and callbacks.questLogStatus(entry.id))]
         row.logStatus:SetText(status and status[1] or (entry.id and "Not in log" or ""))
         if status then
             row.logStatus:SetTextColor(status[2], status[3], status[4])
@@ -587,10 +599,8 @@ function Window.New(callbacks)
         resetScroll(resultScroll, resultBody, y, offset or 0)
     end
 
-    function window:ShowBrowse(entries, message, offset, page, pageCount, dungeon)
+    function window:ShowBrowse(entries, message, offset, page, pageCount)
         setPageControls(page, pageCount)
-        zoneTitle:SetText("Dungeon context")
-        zoneTitle:SetShown(dungeon)
         local y = startResults(message)
         for index, entry in ipairs(entries) do
             y = showResultRow(index, y, entry)

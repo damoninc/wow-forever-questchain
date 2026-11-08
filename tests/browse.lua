@@ -27,6 +27,7 @@ for id = 10, 94 do
 end
 records[10].questLevel, records[11].questLevel = 25, 5
 records[94].questLevel, records[94].zoneOrSort = 10, 717
+records[20].questLevel, records[20].nextQuestInChain, records[21].questLevel = 40, 21, 45
 
 C_Map = {
     GetMapInfo = function(id)
@@ -76,7 +77,7 @@ assert(coroutine.resume(work))
 assert(coroutine.status(work) == "suspended" and model.quests == nil and spawnCalls == 0)
 assert(model:Search("A Lead")[1].id == 2)
 local search = model:Search("Local errand")
-assert(search[1].id == 11 and search[2].id == 94 and search[3].id == 10 and search[4].id == 12)
+assert(search[1].id == 11 and search[2].id == 94 and search[3].id == 10 and search[6].id == 12)
 local browse
 while coroutine.status(work) ~= "dead" do
     local ok, result = coroutine.resume(work)
@@ -120,16 +121,22 @@ assert(#browse:Groups("classes", "WARRIOR") == 1)
 assert(#browse:Groups("classes", "PALADIN") == 0)
 assert(#browse:Groups("zones", 0) == 3)
 
-local rows = browse:Rows("zones", 1, {}, function() return false end)
+local function questStatus(id)
+    return ({ [1] = "completed", [2] = "active", [3] = "ready" })[id]
+end
+local rows = browse:Rows("zones", 1, nil, questStatus)
 local last, page, count = ns.Browse.Page(rows, 999)
 assert(count >= 3 and page == count and #last > 0)
-local first = browse:Rows("zones", 1, { [1] = true }, function(id) return id == 4 end)
-local hiddenGroup, collapsed
-for _, row in ipairs(first) do
-    hiddenGroup = hiddenGroup or row.group.key == 4
-    if row.group.key == 1 then collapsed = not row.step end
-end
-assert(not hiddenGroup and collapsed)
+assert(#rows == #stormwind)
+assert(rows[1].group.key == 1 and rows[1].step.quest.id == 3 and rows[1].status == "active" and rows[1].completed == 1)
+assert(rows[2].group.key == 20 and rows[3].group.key == 11 and rows[4].group.key == 94)
+for index = 3, #rows do assert(rows[index].group.standalone) end
+local completed = browse:Rows("zones", 1, "completed", questStatus)
+assert(#completed == 1 and completed[1].group.key == 1 and completed[1].step.quest.id == 1)
+assert(completed[1].status == "active")
+local allComplete = browse:Rows("zones", 2, nil, function() return "completed" end)
+assert(#allComplete == 2 and allComplete[1].status == "completed")
+assert(browse:Rows("zones", 2, "incomplete", function() return "completed" end)[1] == nil)
 
 local view = model:Build(5, nil, westfallPlot.steps[1].destination)
 assert(view.focusId == 5 and #view.quests == 5)

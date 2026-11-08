@@ -218,24 +218,34 @@ function Browse:MatchZone(mapId)
     end
 end
 
-function Browse:Rows(kind, key, collapsed, isHidden)
-    local rows = {}
+local stepPriority = { ready = 4, active = 3, unstarted = 2, completed = 1 }
+
+function Browse:Rows(kind, key, filter, getStatus)
+    local rows, standalone = {}, {}
     for _, group in ipairs(self:Groups(kind, key)) do
-        local steps = {}
+        local selected, selectedStatus, priority = nil, nil, 0
+        local completed, active = 0, false
         for _, step in ipairs(group.steps) do
-            if not isHidden(step.quest.id) then steps[#steps + 1] = step end
+            local status = getStatus(step.quest.id) or "unstarted"
+            local done = status == "completed"
+            if done then completed = completed + 1 end
+            active = active or status == "active" or status == "ready"
+            local matches = not filter or (filter == "completed" and done) or (filter == "incomplete" and not done)
+            local rank = stepPriority[status]
+            if matches and (rank > priority or (done and rank == priority)) then
+                selected, selectedStatus, priority = step, status, rank
+            end
         end
-        if #steps > 0 then
+        if selected then
+            local status = selectedStatus
             if not group.standalone then
-                rows[#rows + 1] = { group = group }
+                status = completed == #group.steps and "completed" or ((active or completed > 0) and "active" or "unstarted")
             end
-            if not collapsed[group.key] then
-                for _, step in ipairs(steps) do
-                    rows[#rows + 1] = { step = step, group = group }
-                end
-            end
+            local list = group.standalone and standalone or rows
+            list[#list + 1] = { group = group, step = selected, status = status, completed = completed }
         end
     end
+    for _, row in ipairs(standalone) do rows[#rows + 1] = row end
     return rows
 end
 
@@ -245,10 +255,6 @@ function Browse.Page(rows, page)
     page = math.max(1, math.min(page, total))
     local first = (page - 1) * pageSize + 1
     local result = {}
-    local firstRow, previous = rows[first], rows[first - 1]
-    if firstRow and firstRow.step and previous and firstRow.group == previous.group then
-        result[1] = { group = firstRow.group }
-    end
     for index = first, math.min(#rows, first + pageSize - 1) do
         result[#result + 1] = rows[index]
     end

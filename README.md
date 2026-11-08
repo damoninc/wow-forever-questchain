@@ -16,9 +16,11 @@ Open the **Browse** tab to search by name or ID, or choose **By category** for *
 
 The **Quest log** column in Search and By category shows **In progress**, **Ready to turn in**, **Completed**, or **Not in log** for your current character.
 
-Catalog results sort by quest level, lowest first. A chain is listed by its lowest known quest level in the selected category, with its steps in chain order. Results without a known level appear at the end.
+In **By category**, choose **Show completed** to find finished quests in the selected zone, dungeon, or class. **Show all** clears the filter.
 
-Zone and dungeon pickers also sort by level and show a range when available. Ranges come from the game map when it supplies them, or from the category's quest levels. Dungeon results include linked steps outside the instance, labeled separately from quests assigned to that dungeon.
+In category browsing, chain rows come first, followed by standalone quests. Each group sorts by level, lowest first, with unknown levels at the end. A chain uses its lowest known quest level and shows progress for the steps in that category. Click it to open the timeline at a relevant step. A partly finished chain can appear under **Show completed**, which opens it at a completed step. Search results sort by quest level.
+
+Zone and dungeon pickers also sort by level and show a range when available. Ranges come from the game map when it supplies them, or from the category's quest levels. Dungeon chains include linked steps outside the instance when opened.
 
 Open **Rewards** to browse items awarded by quests in a zone or dungeon. Search by item name or ID and hover an item for its tooltip. Choose a source quest to open its chain, then return to **Rewards** to resume browsing. The list uses item-to-quest links available in QuestieDB.
 
