@@ -4,16 +4,14 @@ local Window = {}
 ns.Window = Window
 
 local colors = {
-    accent = { 1, 0.87, 0.57 },
-    text = { 0.96, 0.90, 0.79 },
-    muted = { 0.76, 0.70, 0.60 },
-    backdrop = { 0.074, 0.058, 0.045, 0.99 },
-    edge = { 0.48, 0.36, 0.22, 1 },
-    header = { 0.18, 0.13, 0.09 },
-    panel = { 0.105, 0.081, 0.061 },
-    card = { 0.17, 0.125, 0.081 },
-    selected = { 0.31, 0.22, 0.12 },
-    highlight = { 0.66, 0.47, 0.25, 0.30 },
+    accent = { 1, 0.82, 0 },
+    text = { 1, 1, 1 },
+    muted = { 0.76, 0.73, 0.66 },
+    ink = { 0.16, 0.10, 0.05 },
+    inkHeading = { 0.31, 0.17, 0.07 },
+    edge = { 0.41, 0.34, 0.23, 1 },
+    card = { 0.10, 0.08, 0.06, 0.90 },
+    selected = { 0.32, 0.23, 0.08 },
     connector = { 0.73, 0.58, 0.34, 0.9 },
     optional = { 0.73, 0.58, 0.34, 0.42 },
 }
@@ -25,8 +23,8 @@ local statuses = {
     unstarted = { "Unstarted", 0.67, 0.69, 0.71 },
 }
 local itemFallbackIcon = 134400
-local backdrop = { bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
-local cardEdge = { edgeFile = backdrop.edgeFile, edgeSize = 1 }
+local cardEdge = { edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
+local questHighlight = "Interface\\QuestFrame\\UI-QuestTitleHighlight"
 
 local function fill(parent, layer, r, g, b, a)
     local texture = parent:CreateTexture(nil, layer)
@@ -51,12 +49,18 @@ local function label(parent, template, color, x, y, width, value)
     return text
 end
 
-local function panel(parent, x, top, width, height, heading)
-    local frame = CreateFrame("Frame", nil, parent)
+local function panel(parent, x, top, width, height, heading, parchment)
+    local frame = CreateFrame("Frame", nil, parent, "InsetFrameTemplate")
     frame:SetPoint("TOPLEFT", x, -top)
     frame:SetSize(width, height)
-    fill(frame, "BACKGROUND", unpack(colors.panel))
-    local title = label(frame, "GameFontNormalSmall", colors.accent, 12, 12, width - 24, heading)
+    if parchment then
+        local paper = frame:CreateTexture(nil, "BACKGROUND", nil, -4)
+        paper:SetAtlas("QuestDetailsBackgrounds")
+        paper:SetPoint("TOPLEFT", 3, -3)
+        paper:SetPoint("BOTTOMRIGHT", -3, 3)
+    end
+    local title = label(frame, parchment and "QuestFont" or "GameFontNormalSmall",
+        parchment and colors.inkHeading or colors.accent, 12, 12, width - 24, heading)
     local scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 10, -36)
     scroll:SetPoint("BOTTOMRIGHT", -26, 10)
@@ -77,7 +81,7 @@ end
 local function makeButton(parent, template)
     local button = CreateFrame("Button", nil, parent, template)
     button.background = fill(button, "BACKGROUND", unpack(colors.card))
-    fill(button, "HIGHLIGHT", unpack(colors.highlight))
+    button:SetHighlightTexture(questHighlight, "ADD")
     button.title = font(button, "GameFontHighlight", colors.text)
     button.title:SetPoint("TOPLEFT", 8, -6)
     button.title:SetWordWrap(false)
@@ -88,17 +92,8 @@ local function makeButton(parent, template)
 end
 
 local function makeControl(parent, title, width)
-    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     button:SetSize(width, 24)
-    button:SetBackdrop(cardEdge)
-    button:SetBackdropBorderColor(unpack(colors.edge))
-    button.background = fill(button, "BACKGROUND", unpack(colors.card))
-    fill(button, "HIGHLIGHT", unpack(colors.highlight))
-    local caption = font(button, "GameFontHighlightSmall", colors.text)
-    caption:SetAllPoints()
-    caption:SetJustifyH("CENTER")
-    caption:SetJustifyV("MIDDLE")
-    button:SetFontString(caption)
     button:SetText(title)
     return button
 end
@@ -107,9 +102,7 @@ local function makeBrowseMenu(parent, x, top, width)
     local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
     dropdown:SetPoint("TOPLEFT", x, -top)
     dropdown:SetWidth(width)
-    dropdown.Background:Hide()
     dropdown.Text:SetJustifyH("LEFT")
-    fill(dropdown, "BACKGROUND", unpack(colors.card))
     return dropdown
 end
 
@@ -173,8 +166,7 @@ local function createRewardPage(parent, top, height, callbacks)
     local frame = CreateFrame("Frame", nil, parent)
     frame:SetPoint("TOPLEFT", 14, -top)
     frame:SetSize(972, height)
-    fill(frame, "BACKGROUND", unpack(colors.panel))
-    local kind = makeBrowseMenu(frame, 12, 28, 180)
+    local kind = makeBrowseMenu(frame, 12, 28, 168)
     setupCategoryMenu(kind, config.kinds, nil, config.kind, config.selectKind)
     local category = makeBrowseMenu(frame, 200, 28, 312)
     label(frame, "GameFontNormalSmall", colors.muted, 12, 10, 180, "BROWSE BY")
@@ -274,48 +266,44 @@ local function createRewardPage(parent, top, height, callbacks)
 end
 
 function Window.New(callbacks)
-    local frame = CreateFrame("Frame", "ForeverQuestChainWindow", UIParent, "BackdropTemplate")
+    local frame = CreateFrame("Frame", "ForeverQuestChainWindow", UIParent, "PortraitFrameTemplate")
     frame:SetSize(1000, 622)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
     frame:SetMovable(true)
     frame:SetClampedToScreen(true)
     frame:EnableMouse(true)
-    frame:SetBackdrop(backdrop)
-    frame:SetBackdropColor(unpack(colors.backdrop))
-    frame:SetBackdropBorderColor(unpack(colors.edge))
+    frame:SetTitle("QuestChain")
+    frame:SetPortraitToAsset("Interface\\QuestFrame\\UI-QuestLog-BookIcon")
     frame:Hide()
     UISpecialFrames[#UISpecialFrames + 1] = frame:GetName()
 
     local header = CreateFrame("Frame", nil, frame)
-    header:SetPoint("TOPLEFT", 1, -1)
-    header:SetPoint("TOPRIGHT", -1, -1)
-    header:SetHeight(62)
-    fill(header, "BACKGROUND", unpack(colors.header))
+    header:SetPoint("TOPLEFT", 60, -1)
+    header:SetPoint("TOPRIGHT", -28, -1)
+    header:SetHeight(21)
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function() frame:StartMoving() end)
     header:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
-    label(header, "GameFontNormalHuge", colors.accent, 17, 8, 220, "QuestChain")
-    label(header, "GameFontHighlightSmall", colors.muted, 18, 37, 300, "WORLD OF WARCRAFT  /  FOREVER")
-    local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", -4, -4)
-    close:SetFrameLevel(header:GetFrameLevel() + 1)
 
     local footer = CreateFrame("Frame", nil, frame)
     footer:SetPoint("BOTTOMLEFT", 1, 1)
     footer:SetPoint("BOTTOMRIGHT", -1, 1)
     footer:SetHeight(42)
-    fill(footer, "BACKGROUND", unpack(colors.header))
-    local catalogTab = makeControl(footer, "Browse", 106)
-    catalogTab:SetPoint("LEFT", 13, 0)
-    local chainTab = makeControl(footer, "Chain", 106)
-    chainTab:SetPoint("LEFT", catalogTab, "RIGHT", 5, 0)
-    chainTab:Disable()
-    local rewardsTab = makeControl(footer, "Rewards", 106)
-    rewardsTab:SetPoint("LEFT", chainTab, "RIGHT", 5, 0)
+    footer.minTabWidth = 92
+    local catalogTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
+    catalogTab:SetText("Browse")
+    catalogTab:SetPoint("TOPLEFT", 13, -2)
+    local chainTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
+    chainTab:SetText("Chain")
+    local rewardsTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
+    rewardsTab:SetText("Rewards")
+    footer.Tabs = { catalogTab, chainTab, rewardsTab }
+    PanelTemplates_SetNumTabs(footer, #footer.Tabs)
+    PanelTemplates_SetTabEnabled(footer, 2, false)
 
-    local bodyTop, bodyHeight = 74, 495
+    local bodyTop, bodyHeight = 56, 513
     local rewardPage, rewardQuery, rewardCategory, rewardScroll, showRewardItems =
         createRewardPage(frame, bodyTop, bodyHeight, callbacks)
     local chainBody, chainScroll, chainWidth, chainPanel =
@@ -325,12 +313,11 @@ function Window.New(callbacks)
     chainTitle:SetWordWrap(false)
     local chainContext = label(chainPanel, "GameFontHighlightSmall", colors.muted, 12, 59, chainWidth, "")
     local detailBody, detailScroll, detailWidth, detailPanel =
-        panel(frame, 674, bodyTop, 312, bodyHeight, "QUEST DETAILS")
+        panel(frame, 674, bodyTop, 312, bodyHeight, "Quest Details", true)
     local catalog = CreateFrame("Frame", nil, frame)
     local catalogWidth, resultsTop = 972, 85
     catalog:SetPoint("TOPLEFT", 14, -bodyTop)
     catalog:SetSize(catalogWidth, bodyHeight)
-    fill(catalog, "BACKGROUND", unpack(colors.panel))
     label(catalog, "GameFontNormalLarge", colors.accent, 12, 9, 260, "Quest catalog")
 
     local search = CreateFrame("EditBox", nil, catalog, "InputBoxTemplate")
@@ -361,9 +348,8 @@ function Window.New(callbacks)
     local searchMode = modeButton(254, "Search", false)
     local browseMode = modeButton(366, "By category", true)
     searchMode:Disable()
-    searchMode.background:SetColorTexture(unpack(colors.selected))
 
-    local kindMenu = makeBrowseMenu(catalog, 12, 48, 180)
+    local kindMenu = makeBrowseMenu(catalog, 12, 48, 168)
     kindMenu:SetupMenu(function(_, menu)
         for _, option in ipairs(callbacks.browseKinds) do
             local key = option.key
@@ -433,17 +419,14 @@ function Window.New(callbacks)
     local resultMessage = label(resultBody, "GameFontHighlightSmall", colors.muted, 2, 4, resultWidth - 4,
         "Search by name or quest ID.")
     local chainMessage = label(chainBody, "GameFontHighlightSmall", colors.muted, 2, 4, chainWidth - 4, "")
-    local rewardSummary = CreateFrame("Frame", nil, detailBody, "BackdropTemplate")
+    local rewardSummary = CreateFrame("Frame", nil, detailBody)
     rewardSummary:SetSize(detailWidth - 4, 50)
-    rewardSummary:SetBackdrop(backdrop)
-    rewardSummary:SetBackdropColor(unpack(colors.card))
-    rewardSummary:SetBackdropBorderColor(unpack(colors.edge))
     rewardSummary:Hide()
     local metricWidth = (detailWidth - 4) / 2
-    label(rewardSummary, "GameFontNormalSmall", colors.accent, 10, 7, metricWidth - 12, "XP")
-    label(rewardSummary, "GameFontNormalSmall", colors.accent, metricWidth + 10, 7, metricWidth - 12, "COIN")
-    local rewardXP = label(rewardSummary, "GameFontNormalLarge", colors.text, 10, 23, metricWidth - 12, "")
-    local rewardCoin = label(rewardSummary, "GameFontNormalLarge", colors.text, metricWidth + 10, 23, metricWidth - 12, "")
+    label(rewardSummary, "QuestFont", colors.inkHeading, 10, 7, metricWidth - 12, "XP")
+    label(rewardSummary, "QuestFont", colors.inkHeading, metricWidth + 10, 7, metricWidth - 12, "Coin")
+    local rewardXP = label(rewardSummary, "QuestFont", colors.ink, 10, 24, metricWidth - 12, "")
+    local rewardCoin = label(rewardSummary, "QuestFont", colors.ink, metricWidth + 10, 24, metricWidth - 12, "")
     resetScroll(resultScroll, resultBody, 32, 0)
     resetScroll(chainScroll, chainBody, 32, 0)
     resetScroll(detailScroll, detailBody, 32, 0)
@@ -458,9 +441,7 @@ function Window.New(callbacks)
         detailPanel:SetShown(chain)
         rewardPage:SetShown(page == "rewards")
         rewardQuery:ClearFocus()
-        catalogTab.background:SetColorTexture(unpack(open and colors.selected or colors.card))
-        chainTab.background:SetColorTexture(unpack(chain and colors.selected or colors.card))
-        rewardsTab.background:SetColorTexture(unpack(page == "rewards" and colors.selected or colors.card))
+        PanelTemplates_SetTab(footer, open and 1 or (chain and 2 or 3))
         if open and not browsing and frame:IsShown() then
             search:SetFocus()
         else
@@ -489,8 +470,6 @@ function Window.New(callbacks)
         kindMenu:SetShown(enabled)
         categoryMenu:SetShown(enabled)
         hideCompleted:SetShown(enabled)
-        browseMode.background:SetColorTexture(unpack(enabled and colors.selected or colors.card))
-        searchMode.background:SetColorTexture(unpack(enabled and colors.card or colors.selected))
         if enabled then
             browseMode:Disable()
             searchMode:Enable()
@@ -620,7 +599,7 @@ function Window.New(callbacks)
     end
 
     function window:ShowChain(view, selectedId, statusesById, scrollToId)
-        chainTab:Enable()
+        if chainTab.isDisabled then PanelTemplates_SetTabEnabled(footer, 2, true) end
         local hasParent, optionalSource, structural = {}, {}, {}
         for _, edge in ipairs(view.edges) do
             if edge.kind == "breadcrumb" or edge.kind == "substitute" then
@@ -748,11 +727,11 @@ function Window.New(callbacks)
             textCount = textCount + 1
             local normal = detailLines[textCount]
             if not normal then
-                normal = font(detailBody, "GameFontHighlight", colors.text)
+                normal = font(detailBody, "QuestFont", colors.ink)
                 detailLines[textCount] = normal
             end
-            normal:SetFontObject(title and GameFontNormalLarge or (heading and GameFontNormal or GameFontHighlight))
-            normal:SetTextColor(unpack(title and colors.text or (heading and colors.accent or colors.text)))
+            normal:SetFontObject(title and QuestTitleFont or QuestFont)
+            normal:SetTextColor(unpack(heading and colors.inkHeading or colors.ink))
             normal:ClearAllPoints()
             normal:SetPoint("TOPLEFT", 2, -y)
             normal:SetWidth(detailWidth - 4)
@@ -813,12 +792,10 @@ function Window.New(callbacks)
                 itemCount = itemCount + 1
                 local row = rewardRows[itemCount]
                 if not row then
-                    row = makeButton(detailBody)
-                    row.title:ClearAllPoints()
-                    row.title:SetPoint("TOPLEFT", 33, -8)
-                    row.icon = row:CreateTexture(nil, "ARTWORK")
-                    row.icon:SetPoint("LEFT", 4, 0)
-                    row.icon:SetSize(24, 24)
+                    row = CreateFrame("Button", nil, detailBody, "LargeItemButtonTemplate")
+                    row:SetSize(detailWidth - 4, 41)
+                    row.NameFrame:SetWidth(detailWidth - 30)
+                    row.Name:SetWidth(detailWidth - 62)
                     row:SetScript("OnEnter", showTooltip)
                     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
                     row:SetScript("OnHide", function(self)
@@ -831,12 +808,11 @@ function Window.New(callbacks)
                 row.reward = item
                 row:ClearAllPoints()
                 row:SetPoint("TOPLEFT", 2, -y)
-                row:SetSize(detailWidth - 4, 32)
-                row.icon:SetTexture(item.icon or C_Item.GetItemIconByID(item.id) or itemFallbackIcon)
-                row.title:SetWidth(detailWidth - 44)
-                row.title:SetText(itemName(item) .. (item.quantity > 1 and (" x" .. item.quantity) or ""))
+                row.Icon:SetTexture(item.icon or C_Item.GetItemIconByID(item.id) or itemFallbackIcon)
+                row.Name:SetText(itemName(item))
+                row.Count:SetText(item.quantity > 1 and tostring(item.quantity) or "")
                 row:Show()
-                y = y + 37
+                y = y + 46
             end
         end
 
