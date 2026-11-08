@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: QuestChain
+## Notes: Explore quest chains, objectives, and rewards in WoW Forever.
+## Version: 0.1.0
+## Dependencies: QuestieDB
+## OptionalDeps: TomTom
+
+QuestData.lua
+Chain.lua
+Browse.lua
+Rewards.lua
+Timeline.lua
+Map.lua
+Map.xml
+Window.lua
+Core.lua

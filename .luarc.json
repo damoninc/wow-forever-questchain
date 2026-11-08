@@ -1,0 +1,10 @@
+{
+  "runtime.version": "Lua 5.1",
+  "completion.callSnippet": "Both",
+  "workspace.library": [
+    ".wow-types/forever",
+    ".wow-types/framexml",
+    ".wow-types/questiedb",
+    "types"
+  ]
+}

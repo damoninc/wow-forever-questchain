@@ -1,0 +1,10 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Frame name="ForeverQuestChainMapPinTemplate" mixin="ForeverQuestChainMapPinMixin" enableMouseMotion="true" virtual="true">
+        <Size x="30" y="30"/>
+        <Layers>
+            <Layer level="ARTWORK">
+                <Texture atlas="Waypoint-MapPin-Untracked" setAllPoints="true"/>
+            </Layer>
+        </Layers>
+    </Frame>
+</Ui>
