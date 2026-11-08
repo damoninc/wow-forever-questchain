@@ -13,6 +13,7 @@ local model = ns.Chain.New(source)
 local window, view, selectedId
 local browseIndex, browseBuilding, browsing
 local browse = { kind = "zones", page = 1, offset = 0, collapsed = {} }
+local rewardCatalog, rewardBuilding, rewardState
 local searchResults, searchMessage, searchOffset = {}, "Search by name or quest ID.", 0
 local player = {
     level = 0,
@@ -172,23 +173,23 @@ local browseKinds = {
 }
 local browsePrompts = { zones = "Choose a zone", dungeons = "Choose a dungeon", classes = "Choose a class" }
 
-local function updateBrowseCategories()
+local function categoryOptions(kind)
     local options = {}
     if browseIndex then
         local shortcutKey, shortcutLabel
-        if browse.kind == "zones" then
+        if kind == "zones" then
             local zone = browseIndex:MatchZone(C_Map.GetBestMapForUnit("player"))
             shortcutKey, shortcutLabel = zone and zone.key, "Current Zone"
-        elseif browse.kind == "classes" then
+        elseif kind == "classes" then
             local _, token = UnitClass("player")
             shortcutKey, shortcutLabel = token, "My Class"
         end
-        for _, category in ipairs(browseIndex:Categories(browse.kind)) do
+        for _, category in ipairs(browseIndex:Categories(kind)) do
             local name = category.name
             if category.key == shortcutKey then
                 name = name .. " (" .. shortcutLabel .. ")"
             end
-            if browse.kind ~= "classes" and category.minLevel then
+            if kind ~= "classes" and category.minLevel then
                 name = name .. "  /  Lv " .. category.minLevel
                 if category.maxLevel > category.minLevel then
                     name = name .. "-" .. category.maxLevel
@@ -202,7 +203,11 @@ local function updateBrowseCategories()
             end
         end
     end
-    window:SetBrowseCategories(options, browsePrompts[browse.kind])
+    return options
+end
+
+local function updateBrowseCategories()
+    window:SetBrowseCategories(categoryOptions(browse.kind), browsePrompts[browse.kind])
 end
 
 local function showBrowse(offset)
@@ -254,6 +259,100 @@ local function showBrowse(offset)
     window:ShowBrowse(entries, message, offset, pageNumber, pageCount, browse.kind == "dungeons")
 end
 
+local function showRewardCatalog(offset)
+    local entries, selected, message = {}, nil, nil
+    if rewardBuilding or browseBuilding then
+        message = "Loading quest rewards..."
+    elseif not rewardCatalog or not browseIndex then
+        message = "Quest rewards unavailable from QuestieDB."
+    elseif not rewardState.category then
+        message = "Choose a zone or dungeon to see its quest rewards."
+    else
+        entries = rewardCatalog:Search(browseIndex, rewardState.kind, rewardState.category, rewardState.query)
+        for _, entry in ipairs(entries) do
+            if entry.item.id == rewardState.selectedId then
+                selected = entry
+                break
+            end
+        end
+        selected = selected or entries[1]
+        rewardState.selectedId = selected and selected.item.id
+        if not selected then message = "No matching quest rewards." end
+    end
+    window:ShowRewardItems(entries, selected, message, offset)
+end
+
+local function updateRewardCategories()
+    if browseIndex and rewardState.useCurrentZone then
+        local zone = browseIndex:MatchZone(C_Map.GetBestMapForUnit("player"))
+        rewardState.category = zone and zone.key
+        rewardState.useCurrentZone = nil
+    end
+    local kind = rewardState.kind
+    window:SetRewardCategories(categoryOptions(kind), browsePrompts[kind])
+end
+
+local function buildIndex(build, finish)
+    local work = coroutine.create(function() return build(coroutine.yield) end)
+    local function resume()
+        local ok, result = coroutine.resume(work)
+        if not ok or coroutine.status(work) == "dead" then
+            finish(ok, result)
+        else
+            C_Timer.After(0, resume)
+        end
+    end
+    C_Timer.After(0, resume)
+end
+
+local function loadBrowseIndex()
+    if browseIndex or browseBuilding then return end
+    browseBuilding = true
+    buildIndex(function(yieldWork)
+        return ns.Browse.Build(model, source, yieldWork)
+    end, function(ok, result)
+        browseBuilding = false
+        if ok then
+            browseIndex = result
+        else
+            print("QuestChain Browse: " .. tostring(result))
+        end
+        if browsing then
+            updateBrowseCategories()
+            showBrowse(window:ResultOffset())
+        end
+        if rewardState then
+            updateRewardCategories()
+            showRewardCatalog(window:RewardOffset())
+        end
+    end)
+end
+
+local function openRewardCatalog()
+    if not rewardState then
+        local kind = browse.kind == "dungeons" and "dungeons" or "zones"
+        local category = browse.kind == kind and browse.category or nil
+        rewardState = { kind = kind, category = category, query = "", useCurrentZone = not category and kind == "zones" }
+        updateRewardCategories()
+    end
+    loadBrowseIndex()
+    if not rewardCatalog and not rewardBuilding then
+        rewardBuilding = true
+        buildIndex(function(yieldWork)
+            return ns.RewardCatalog.Build(source, yieldWork)
+        end, function(ok, result)
+            rewardBuilding = false
+            if ok then
+                rewardCatalog = result
+            else
+                print("QuestChain Rewards: " .. tostring(result))
+            end
+            showRewardCatalog(window:RewardOffset())
+        end)
+    end
+    showRewardCatalog(window:RewardOffset())
+end
+
 local function setBrowseMode(enabled)
     if browsing then
         browse.offset = window:ResultOffset()
@@ -266,30 +365,7 @@ local function setBrowseMode(enabled)
         window:ShowResults(searchResults, searchMessage, searchOffset)
         return
     end
-    if not browseIndex and not browseBuilding then
-        browseBuilding = true
-        local work = coroutine.create(function()
-            return ns.Browse.Build(model, source, coroutine.yield)
-        end)
-        local function resume()
-            local ok, result = coroutine.resume(work)
-            if not ok or coroutine.status(work) == "dead" then
-                browseBuilding = false
-                if ok then
-                    browseIndex = result
-                else
-                    print("QuestChain Browse: " .. tostring(result))
-                end
-                if browsing then
-                    updateBrowseCategories()
-                    showBrowse(window:ResultOffset())
-                end
-            else
-                C_Timer.After(0, resume)
-            end
-        end
-        C_Timer.After(0, resume)
-    end
+    loadBrowseIndex()
     updateBrowseCategories()
     showBrowse(browse.offset)
 end
@@ -323,6 +399,31 @@ local function getWindow()
                 browse.page = browse.page + step
                 showBrowse(0)
             end,
+            rewardPage = {
+                open = openRewardCatalog,
+                kinds = { browseKinds[1], browseKinds[2] },
+                kind = function() return rewardState and rewardState.kind or "zones" end,
+                category = function() return rewardState.category end,
+                selectKind = function(kind)
+                    if rewardState.kind ~= kind then
+                        rewardState.kind, rewardState.category, rewardState.useCurrentZone = kind, nil, nil
+                        updateRewardCategories()
+                        showRewardCatalog(0)
+                    end
+                end,
+                selectCategory = function(key)
+                    rewardState.category = key
+                    showRewardCatalog(0)
+                end,
+                search = function(query)
+                    rewardState.query = query
+                    showRewardCatalog(0)
+                end,
+                selectItem = function(id)
+                    rewardState.selectedId = id
+                    showRewardCatalog(window:RewardOffset())
+                end,
+            },
         })
     end
     return window

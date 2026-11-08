@@ -9,6 +9,7 @@ QuestData.lua
 Chain.lua
 Browse.lua
 Rewards.lua
+RewardCatalog.lua
 Timeline.lua
 Map.lua
 Map.xml

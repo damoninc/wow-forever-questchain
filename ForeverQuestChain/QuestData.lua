@@ -268,6 +268,15 @@ function QuestData.New(lib)
 
     return {
         ids = quests.GetAllIds, summary = summary, read = read,
+        itemIds = lib.Item and lib.Item.GetAllIds,
+        rewardQuests = lib.Item and lib.Item.questRewards,
+        rewardItem = lib.Item and function(id)
+            local name = lib.Item.name(id)
+            return {
+                id = id, name = name and name ~= "" and name or ("Item #" .. id),
+                level = lib.Item.requiredLevel and positive(lib.Item.requiredLevel(id)),
+            }
+        end,
         pickupZones = pickupZones, classes = classes,
         dungeon = function(areaId) return dungeonsByArea[areaId] end,
         categoryLevels = function(kind, key)

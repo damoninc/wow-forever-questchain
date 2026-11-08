@@ -113,6 +113,18 @@ local function makeBrowseMenu(parent, x, top, width)
     return dropdown
 end
 
+local function setupCategoryMenu(dropdown, options, prompt, selected, choose)
+    if prompt then dropdown:SetDefaultText(prompt) end
+    dropdown:SetEnabled(#options > 0)
+    dropdown:SetupMenu(function(_, menu)
+        menu:SetScrollMode(280)
+        for _, option in ipairs(options) do
+            local key = option.key
+            menu:CreateRadio(option.name, function() return selected() == key end, function() choose(key) end)
+        end
+    end)
+end
+
 local function makeTimelineButton(parent)
     local button = makeButton(parent, "BackdropTemplate")
     button:SetBackdrop(cardEdge)
@@ -156,6 +168,111 @@ local function showTooltip(button)
     GameTooltip:Show()
 end
 
+local function createRewardPage(parent, top, height, callbacks)
+    local config = callbacks.rewardPage
+    local frame = CreateFrame("Frame", nil, parent)
+    frame:SetPoint("TOPLEFT", 14, -top)
+    frame:SetSize(972, height)
+    fill(frame, "BACKGROUND", unpack(colors.panel))
+    local kind = makeBrowseMenu(frame, 12, 28, 180)
+    setupCategoryMenu(kind, config.kinds, nil, config.kind, config.selectKind)
+    local category = makeBrowseMenu(frame, 200, 28, 312)
+    label(frame, "GameFontNormalSmall", colors.muted, 12, 10, 180, "BROWSE BY")
+    label(frame, "GameFontNormalSmall", colors.muted, 200, 10, 312, "LOCATION")
+    label(frame, "GameFontNormalSmall", colors.muted, 532, 10, 260, "FIND AN ITEM")
+    local query = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+    query:SetPoint("TOPLEFT", 536, -28)
+    query:SetSize(290, 24)
+    query:SetAutoFocus(false)
+    query:SetMaxLetters(100)
+    local hint = label(frame, "GameFontDisableSmall", colors.muted, 540, 34, 272, "Item name or ID")
+    query:SetScript("OnTextChanged", function(self)
+        local value = self:GetText()
+        hint:SetShown(value == "")
+        config.search(value)
+    end)
+    query:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    query:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+
+    local list, listScroll, listWidth, _, listTitle = panel(frame, 0, 63, 620, height - 63, "QUEST REWARDS")
+    local sources, sourceScroll, sourceWidth = panel(frame, 630, 63, 342, height - 63, "REWARD SOURCES")
+    local listMessage = label(list, "GameFontHighlightSmall", colors.muted, 2, 4, listWidth - 4, "")
+    local sourceTitle = label(sources, "GameFontNormalLarge", colors.accent, 2, 4, sourceWidth - 4, "")
+    local sourceMeta = font(sources, "GameFontHighlightSmall", colors.muted)
+    sourceMeta:SetWidth(sourceWidth - 4)
+    local itemRows, sourceRows = {}, {}
+    local selectedId
+
+    local function showItems(entries, selection, message, offset)
+        hideAll(itemRows)
+        hideAll(sourceRows)
+        listTitle:SetText(selection and ("QUEST REWARDS  /  " .. #entries) or "QUEST REWARDS")
+        listMessage:SetText(message or "")
+        listMessage:SetShown(message ~= nil)
+        for index, entry in ipairs(entries) do
+            local item = entry.item
+            local row = itemRows[index]
+            if not row then
+                row = makeButton(list)
+                row:SetSize(listWidth, 38)
+                row.title:ClearAllPoints()
+                row.title:SetPoint("TOPLEFT", 42, -6)
+                row.title:SetWidth(listWidth - 50)
+                row.meta:ClearAllPoints()
+                row.meta:SetPoint("TOPLEFT", 42, -22)
+                row.meta:SetWidth(listWidth - 50)
+                row.icon = row:CreateTexture(nil, "ARTWORK")
+                row.icon:SetPoint("LEFT", 5, 0)
+                row.icon:SetSize(28, 28)
+                row:SetScript("OnEnter", showTooltip)
+                row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+                row:SetScript("OnHide", function(self)
+                    if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+                end)
+                itemRows[index] = row
+            end
+            row:SetPoint("TOPLEFT", 0, -(index - 1) * 40)
+            row.reward = item
+            row.title:SetText(item.name)
+            local count = #entry.sources
+            row.meta:SetText(count == 1 and entry.sources[1].quest.title or (count .. " quest sources"))
+            row.icon:SetTexture(C_Item.GetItemIconByID(item.id) or itemFallbackIcon)
+            row.background:SetColorTexture(unpack(entry == selection and colors.selected or colors.card))
+            row:SetScript("OnClick", function() config.selectItem(item.id) end)
+            row:Show()
+        end
+        resetScroll(listScroll, list, message and 32 or #entries * 40, offset or 0)
+
+        local item = selection and selection.item
+        local sourceOffset = item and selectedId == item.id and sourceScroll:GetVerticalScroll() or 0
+        selectedId = item and item.id
+        sourceTitle:SetText(item and item.name or "")
+        sourceMeta:SetPoint("TOPLEFT", 2, -(sourceTitle:GetStringHeight() + 10))
+        sourceMeta:SetText(item and ("Item #" .. item.id .. (item.level and ("  /  Requires level " .. item.level) or ""))
+            or "Select an item to see the quests that award it.")
+        local y = sourceTitle:GetStringHeight() + sourceMeta:GetStringHeight() + 24
+        if selection then
+            for index, step in ipairs(selection.sources) do
+                local quest = step.quest
+                local row = sourceRows[index] or makeButton(sources)
+                sourceRows[index] = row
+                row:SetPoint("TOPLEFT", 2, -y)
+                row:SetSize(sourceWidth - 4, 42)
+                row.title:SetWidth(sourceWidth - 20)
+                row.meta:SetWidth(sourceWidth - 20)
+                row.title:SetText(quest.title)
+                row.meta:SetText("Open chain  /  #" .. quest.id .. (quest.level and ("  /  Level " .. quest.level) or ""))
+                row:SetScript("OnClick", function() callbacks.openQuest(quest.id, step.destination) end)
+                row:Show()
+                y = y + 46
+            end
+        end
+        resetScroll(sourceScroll, sources, y, sourceOffset)
+    end
+
+    return frame, query, category, listScroll, showItems
+end
+
 function Window.New(callbacks)
     local frame = CreateFrame("Frame", "ForeverQuestChainWindow", UIParent, "BackdropTemplate")
     frame:SetSize(1000, 622)
@@ -195,8 +312,12 @@ function Window.New(callbacks)
     local chainTab = makeControl(footer, "Chain", 106)
     chainTab:SetPoint("LEFT", catalogTab, "RIGHT", 5, 0)
     chainTab:Disable()
+    local rewardsTab = makeControl(footer, "Rewards", 106)
+    rewardsTab:SetPoint("LEFT", chainTab, "RIGHT", 5, 0)
 
     local bodyTop, bodyHeight = 74, 495
+    local rewardPage, rewardQuery, rewardCategory, rewardScroll, showRewardItems =
+        createRewardPage(frame, bodyTop, bodyHeight, callbacks)
     local chainBody, chainScroll, chainWidth, chainPanel =
         panel(frame, 14, bodyTop, 650, bodyHeight, "QUEST TIMELINE")
     chainScroll:SetPoint("TOPLEFT", 10, -85)
@@ -330,12 +451,16 @@ function Window.New(callbacks)
     local window = {}
     local browsing = false
 
-    function window:SetCatalogOpen(open)
+    local function showPage(page)
+        local open, chain = page == "browse", page == "chain"
         catalog:SetShown(open)
-        chainPanel:SetShown(not open)
-        detailPanel:SetShown(not open)
+        chainPanel:SetShown(chain)
+        detailPanel:SetShown(chain)
+        rewardPage:SetShown(page == "rewards")
+        rewardQuery:ClearFocus()
         catalogTab.background:SetColorTexture(unpack(open and colors.selected or colors.card))
-        chainTab.background:SetColorTexture(unpack(open and colors.card or colors.selected))
+        chainTab.background:SetColorTexture(unpack(chain and colors.selected or colors.card))
+        rewardsTab.background:SetColorTexture(unpack(page == "rewards" and colors.selected or colors.card))
         if open and not browsing and frame:IsShown() then
             search:SetFocus()
         else
@@ -343,8 +468,16 @@ function Window.New(callbacks)
         end
     end
 
+    function window:SetCatalogOpen(open)
+        showPage(open and "browse" or "chain")
+    end
+
     catalogTab:SetScript("OnClick", function() window:SetCatalogOpen(true) end)
     chainTab:SetScript("OnClick", function() window:SetCatalogOpen(false) end)
+    rewardsTab:SetScript("OnClick", function()
+        showPage("rewards")
+        callbacks.rewardPage.open()
+    end)
     window:SetCatalogOpen(true)
 
     function window:SetBrowseMode(enabled)
@@ -372,16 +505,19 @@ function Window.New(callbacks)
     end
 
     function window:SetBrowseCategories(options, prompt)
-        categoryMenu:SetDefaultText(prompt)
-        categoryMenu:SetEnabled(#options > 0)
-        categoryMenu:SetupMenu(function(_, menu)
-            menu:SetScrollMode(280)
-            for _, option in ipairs(options) do
-                local key = option.key
-                menu:CreateRadio(option.name, function() return callbacks.browseCategory() == key end,
-                    function() callbacks.selectBrowseCategory(key) end)
-            end
-        end)
+        setupCategoryMenu(categoryMenu, options, prompt, callbacks.browseCategory, callbacks.selectBrowseCategory)
+    end
+
+    function window:SetRewardCategories(options, prompt)
+        setupCategoryMenu(rewardCategory, options, prompt, callbacks.rewardPage.category, callbacks.rewardPage.selectCategory)
+    end
+
+    function window:ShowRewardItems(entries, selection, message, offset)
+        showRewardItems(entries, selection, message, offset)
+    end
+
+    function window:RewardOffset()
+        return rewardScroll:GetVerticalScroll()
     end
 
     function window:ResultOffset()
@@ -402,6 +538,7 @@ function Window.New(callbacks)
     function window:Toggle()
         if frame:IsShown() then
             search:ClearFocus()
+            rewardQuery:ClearFocus()
             frame:Hide()
         else
             self:Show()

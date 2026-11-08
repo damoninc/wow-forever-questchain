@@ -20,6 +20,8 @@ Catalog results sort by quest level, lowest first. A chain is listed by its lowe
 
 Zone and dungeon pickers also sort by level and show a range when available. Ranges come from the game map when it supplies them, or from the category's quest levels. Dungeon results include linked steps outside the instance, labeled separately from quests assigned to that dungeon.
 
+Open **Rewards** to browse items awarded by quests in a zone or dungeon. Search by item name or ID and hover an item for its tooltip. Choose a source quest to open its chain, then return to **Rewards** to resume browsing. The list uses item-to-quest links available in QuestieDB.
+
 In **Quest Details**, select **Show on map** under a pickup or turn-in location with known coordinates. The action opens the zone map and adds a TomTom waypoint if TomTom is enabled. Otherwise QuestChain marks the location until you close the world map. Use `/questchain` to return to the selected quest.
 
 Select a step to see its objectives, prerequisites, pickup and turn-in information, and rewards. Guaranteed items and pick-one rewards appear separately. Hover an item for its tooltip. **Unavailable** means the client could not supply a confirmed value for that field.
@@ -31,7 +33,7 @@ Select a step to see its objectives, prerequisites, pickup and turn-in informati
 - Compare the panel with Blizzard's quest offer for a quest that awards coin or choice items. Switch quests quickly and verify that the reward details follow your selection.
 - Accept or turn in a quest in the displayed chain and check that its status changes.
 
-Run `lua tests/chain.lua`, `lua tests/rewards.lua`, `lua tests/timeline.lua`, and `lua tests/browse.lua` from the repository root with Lua 5.1. See [AGENTS.md](AGENTS.md) for the product goals and development guide.
+Run the Lua 5.1 fixtures in `tests/` from the repository root. See [AGENTS.md](AGENTS.md) for the product goals and development guide.
 
 ## Publishing
 
