@@ -1,5 +1,5 @@
 local ns = {}
-for _, file in ipairs({ "QuestData", "Chain", "Browse" }) do
+for _, file in ipairs({ "QuestData", "Chain", "Browse", "RewardCatalog" }) do
     assert(loadfile("ForeverQuestChain/" .. file .. ".lua"))("ForeverQuestChain", ns)
 end
 
@@ -12,7 +12,7 @@ end
 local records = {
     [1] = quest("The Plot", { startedBy = { { 11 } }, nextQuestInChain = 2 }),
     [2] = quest("A Lead", { startedBy = { { 12, 13 } }, nextQuestInChain = 3, zoneOrSort = 10029 }),
-    [3] = quest("The Finale", { startedBy = { { 11 } }, zoneOrSort = 1581 }),
+    [3] = quest("The Finale", { startedBy = { { 11 } }, zoneOrSort = 1581, preQuestSingle = { 2 } }),
     [4] = quest("The Plot", { startedBy = { { 11 } }, zoneOrSort = 2717 }),
     [5] = quest("An Invitation", { startedBy = { { 12 } }, breadcrumbForQuestId = 2 }),
     [6] = quest("A Shared Lead", { startedBy = { { 12 } } }),
@@ -22,6 +22,11 @@ local records = {
 }
 records[1].breadcrumbs, records[4].breadcrumbs = { 6 }, { 6 }
 records[1].questLevel, records[3].questLevel = 30, 20
+local skyborneAlliance, skyborneHorde = 2 ^ 32, 2 ^ 33
+records[1].requiredRaces = 0
+records[2].requiredRaces = 77 + skyborneAlliance
+records[4].requiredRaces = 178 + skyborneHorde
+records[7].requiredRaces = skyborneAlliance
 for id = 10, 94 do
     records[id] = quest("Local errand " .. id, { startedBy = { { 11 } } })
 end
@@ -43,7 +48,12 @@ C_Map = {
 local spawnCalls = 0
 local source = assert(ns.QuestData.New({
     RequireContract = function() return true end,
-    Enum = { sortKeys = { MAGE = -161 }, classKeys = { WARRIOR = 1, PALADIN = 2, MAGE = 128, ALL_CLASSES = 131 } },
+    Enum = {
+        sortKeys = { MAGE = -161 },
+        classKeys = { WARRIOR = 1, PALADIN = 2, MAGE = 128, ALL_CLASSES = 131 },
+        raceMaskById = { [1] = 1, [2] = 2, [95] = skyborneAlliance, [96] = skyborneHorde },
+        factionRaceMasks = { Alliance = 77 + skyborneAlliance, Horde = 178 + skyborneHorde },
+    },
     Quest = {
         GetAllIds = function()
             local ids = {}
@@ -56,6 +66,11 @@ local source = assert(ns.QuestData.New({
             for i, key in ipairs(keys) do result[i] = records[id][key] end
             return result
         end,
+    },
+    Item = {
+        GetAllIds = function() return { 100, 101 } end,
+        questRewards = function(id) return id == 100 and { 2, 3 } or { 2 } end,
+        name = function(id) return "Reward " .. id end,
     },
     Npc = { spawns = function(id)
         spawnCalls = spawnCalls + 1
@@ -140,4 +155,58 @@ assert(browse:Rows("zones", 2, "incomplete", function() return "completed" end)[
 
 local view = model:Build(5, nil, westfallPlot.steps[1].destination)
 assert(view.focusId == 5 and #view.quests == 5)
+
+local function forCharacter(raceId, faction)
+    return ns.Chain.New(source, function() return source.characterFilter(raceId, faction) end)
+end
+local alliance = forCharacter(95, "Alliance")
+local horde = forCharacter(96, "Horde")
+local human = forCharacter(1, "Alliance")
+local plots = alliance:Search("The Plot")
+assert(#plots == 1 and plots[1].id == 1)
+assert(#horde:Search("The Plot") == 2)
+assert(#horde:Search("2") == 0 and not horde:Build(2))
+assert(alliance:Search("2")[1].id == 2 and alliance:Search("7")[1].id == 7)
+assert(#human:Search("7") == 0 and human:Search("2")[1].id == 2)
+assert(#forCharacter(nil, "Horde"):Search("2") == 0)
+assert(forCharacter(nil, "Horde"):Search("4")[1].id == 4)
+assert(forCharacter(nil, nil):Search("2")[1].id == 2)
+
+local hordeView = horde:Build(3)
+assert(#hordeView.quests == 1 and hordeView.quests[1].id == 3)
+assert(#hordeView.missingIds == 0 and not hordeView.uncertainIds[3])
+local hordeBrowse = ns.Browse.Build(horde, source)
+local hordeDungeon = hordeBrowse:Groups("dungeons", 1581)
+assert(#hordeDungeon == 1 and #hordeDungeon[1].steps == 1 and hordeDungeon[1].steps[1].quest.id == 3)
+local hordeRewards = ns.RewardCatalog.Build(source):Search(hordeBrowse, "dungeons", 1581, "")
+assert(#hordeRewards == 1 and hordeRewards[1].item.id == 100 and #hordeRewards[1].sources == 1)
+assert(hordeRewards[1].sources[1].quest.id == 3)
+
+local function wetlandsModel(nextQuest)
+    local quests = {
+        [95647] = quest("Lost in the Thicket Things", { nextQuestInChain = nextQuest }),
+        [95809] = quest("Heartwoven"),
+    }
+    local wetlands = assert(ns.QuestData.New({
+        RequireContract = function() return true end,
+        Quest = {
+            GetAllIds = function() return { 95647, 95809 } end,
+            Exists = function(id) return quests[id] ~= nil end,
+            GetAll = function(id, keys)
+                local fields = {}
+                for index, key in ipairs(keys) do fields[index] = quests[id][key] end
+                return fields
+            end,
+        },
+    }))
+    return ns.Chain.New(wetlands)
+end
+
+assert(#wetlandsModel():Build(95809).quests == 1)
+local wetlands = wetlandsModel(95809)
+for _, id in ipairs({ 95647, 95809 }) do
+    local chain = wetlands:Build(id)
+    assert(#chain.quests == 2 and chain.quests[1].id == 95647 and chain.quests[2].id == 95809)
+    assert(#chain.edges == 1 and chain.edges[1].kind == "sequence")
+end
 print("browse tests passed")

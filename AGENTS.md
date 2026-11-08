@@ -23,6 +23,7 @@ Keep the path from search to an answer short. Prioritize a readable timeline, ac
 
 - The display name is **QuestChain** and the addon directory is `ForeverQuestChain`. Target the Forever client with Lua 5.1-compatible code. The TOC currently targets interface `16001` and controls the runtime load order.
 - `QuestData.lua` reads the public `LibQuestieDB` contract for quest records and relationships. QuestieDB is required. The full Questie addon is optional. `Core.lua` wires the client APIs, events, and slash command.
+- Treat upstream databases and the Forever client as the sources of truth for game data. Do not add hardcoded fallback data or local overrides for missing records, quest links, restrictions, or rewards. Keep gaps visible as missing or unavailable until the source supplies the data.
 - `Chain.lua` builds the bounded quest graph and interprets prerequisites. Keep sequence links, optional lead-ins, and alternatives distinct. Show a blocker only when supported by explicit requirements and current-character state. Keep partial and cyclic data navigable.
 - `Browse.lua` builds the category index on demand. Keep structural chain identities stable, and avoid merging chains that share optional links.
 - `Rewards.lua` manages asynchronous reward requests and caching. Read rewards and progress from Forever. Match replies to quest IDs so a late response cannot replace the selected quest's details.

@@ -78,7 +78,7 @@ function QuestData.New(lib)
         local fields = quests.GetAll(id, {
             "name", "questLevel", "requiredLevel", "zoneOrSort", "preQuestSingle",
             "preQuestGroup", "exclusiveTo", "childQuests", "nextQuestInChain",
-            "breadcrumbs", "breadcrumbForQuestId", "parentQuest", "requiredClasses",
+            "breadcrumbs", "breadcrumbForQuestId", "parentQuest", "requiredClasses", "requiredRaces",
         })
         local successors = fields[8] or {}
         if positive(fields[9]) then
@@ -101,6 +101,7 @@ function QuestData.New(lib)
             areaId = positive(fields[4]),
             zoneOrSort = fields[4],
             classMask = fields[13],
+            raceMask = positive(fields[14]),
         }
         summaries[id] = quest
         return quest
@@ -166,6 +167,32 @@ function QuestData.New(lib)
     dungeonsByArea[10001] = dungeonsByArea[2017]
 
     local enums = lib.Enum or {}
+    local function characterFilter(raceId, faction)
+        local raceBit = enums.raceMaskById and enums.raceMaskById[raceId]
+        local factionMask = enums.factionRaceMasks and enums.factionRaceMasks[faction]
+        if not raceBit and not factionMask then
+            return nil
+        end
+        return function(quest)
+            local mask = quest.raceMask
+            if not mask then
+                return true
+            end
+            -- Forever race masks include bits above Lua's 32-bit bit library.
+            if raceBit then
+                return mask % (2 * raceBit) >= raceBit
+            end
+            local factionBits = factionMask
+            while mask > 0 and factionBits > 0 do
+                if mask % 2 == 1 and factionBits % 2 == 1 then
+                    return true
+                end
+                mask = math.floor(mask / 2)
+                factionBits = math.floor(factionBits / 2)
+            end
+            return false
+        end
+    end
     local classNames, classesBySort, classMasks = {}, {}, {}
     for index, token in ipairs(classTokens) do
         local name = LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[token]
@@ -267,7 +294,7 @@ function QuestData.New(lib)
     end
 
     return {
-        ids = quests.GetAllIds, summary = summary, read = read,
+        ids = quests.GetAllIds, summary = summary, read = read, characterFilter = characterFilter,
         itemIds = lib.Item and lib.Item.GetAllIds,
         rewardQuests = lib.Item and lib.Item.questRewards,
         rewardItem = lib.Item and function(id)

@@ -9,7 +9,11 @@ if not source then
     return
 end
 
-local model = ns.Chain.New(source)
+local model = ns.Chain.New(source, function()
+    local raceId = UnitRace and select(3, UnitRace("player"))
+    local faction = UnitFactionGroup and UnitFactionGroup("player")
+    return source.characterFilter(raceId, faction)
+end)
 local window, view, selectedId
 local browseIndex, browseBuilding, browsing
 local browse = { kind = "zones", page = 1, offset = 0 }
@@ -425,7 +429,7 @@ local questLogAction = "Open in QuestChain"
 local function openQuestFromLog(id)
     getWindow()
     if not openQuest(id) then
-        print("QuestChain: Quest #" .. id .. " is unavailable in QuestieDB.")
+        print("QuestChain: Quest #" .. id .. " is unavailable for this character.")
     end
 end
 

@@ -10,8 +10,8 @@ local function insert(list, value)
     list[#list + 1] = value
 end
 
-function Chain.New(source)
-    return setmetatable({ source = source }, Chain)
+function Chain.New(source, characterFilter)
+    return setmetatable({ source = source, characterFilter = characterFilter }, Chain)
 end
 
 function Chain:Index(yieldWork)
@@ -19,6 +19,8 @@ function Chain:Index(yieldWork)
         return
     end
     local quests, neighbors = {}, {}
+    local isEligible = self.characterFilter and self.characterFilter()
+    local visible = isEligible and {} or quests
     local readSummary = self.source.summary or self.source.read
     local ids = self.source.ids()
     local function yieldAndCheck(index)
@@ -28,11 +30,19 @@ function Chain:Index(yieldWork)
         return self.quests ~= nil
     end
     for index, id in ipairs(ids) do
-        quests[id] = readSummary(id)
+        local quest = readSummary(id)
+        quests[id] = quest
+        if isEligible and quest and isEligible(quest) then
+            visible[id] = quest
+        end
         if yieldAndCheck(index) then return end
     end
 
     local function connect(fromId, toId, kind)
+        -- Keep missing references for partial-data reporting and skip known ineligible steps.
+        if (quests[fromId] and not visible[fromId]) or (quests[toId] and not visible[toId]) then
+            return
+        end
         local edge = { fromId = fromId, toId = toId, kind = kind }
         neighbors[fromId] = neighbors[fromId] or {}
         insert(neighbors[fromId], edge)
@@ -43,7 +53,7 @@ function Chain:Index(yieldWork)
     end
 
     for index, id in ipairs(ids) do
-        local quest = quests[id]
+        local quest = visible[id]
         if quest then
             for _, target in ipairs(quest.successors or {}) do
                 connect(id, target, "sequence")
@@ -72,7 +82,7 @@ function Chain:Index(yieldWork)
         end
         if yieldAndCheck(index) then return end
     end
-    self.quests, self.neighbors = quests, neighbors
+    self.quests, self.visibleQuests, self.neighbors = quests, visible, neighbors
 end
 
 function Chain:Search(query)
@@ -82,11 +92,11 @@ function Chain:Search(query)
     end
     self:Index()
     if query:match("^%d+$") then
-        local quest = self.quests[tonumber(query)]
+        local quest = self.visibleQuests[tonumber(query)]
         return quest and { quest } or {}
     end
     local results = {}
-    for _, quest in pairs(self.quests) do
+    for _, quest in pairs(self.visibleQuests) do
         if quest.title:lower():find(query, 1, true) then
             insert(results, quest)
         end
@@ -114,7 +124,7 @@ end
 
 function Chain:Catalog(yieldWork)
     self:Index(yieldWork)
-    return self.quests, self.neighbors
+    return self.visibleQuests, self.neighbors
 end
 
 local function sortedIds(set)
@@ -135,7 +145,7 @@ end
 
 function Chain:Build(focusId, limit, destination)
     self:Index()
-    if not self.quests[focusId] then
+    if not self.visibleQuests[focusId] then
         return nil
     end
     limit = math.max(1, limit or 100)
