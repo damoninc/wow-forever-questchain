@@ -264,11 +264,12 @@ function Window.New(callbacks)
     local resultBody, resultScroll, resultWidth, resultPanel, resultTitle =
         panel(catalog, 0, resultsTop, catalogWidth, bodyHeight - resultsTop, "SEARCH RESULTS")
     resultScroll:SetPoint("TOPLEFT", 10, -58)
-    local idX, levelX, metaX = 538, 650, 750
+    local idX, levelX, zoneX, statusX = 465, 550, 618, 796
     label(resultPanel, "GameFontNormalSmall", colors.muted, 18, 37, idX - 20, "Quest")
     label(resultPanel, "GameFontNormalSmall", colors.muted, idX + 10, 37, 100, "Quest ID")
     label(resultPanel, "GameFontNormalSmall", colors.muted, levelX + 10, 37, 90, "Level")
-    local metaTitle = label(resultPanel, "GameFontNormalSmall", colors.muted, metaX + 10, 37, 160, "Zone")
+    local zoneTitle = label(resultPanel, "GameFontNormalSmall", colors.muted, zoneX + 10, 37, statusX - zoneX - 8, "Zone")
+    label(resultPanel, "GameFontNormalSmall", colors.accent, statusX + 10, 37, resultWidth - statusX, "Quest log")
     local nextPage = makeControl(resultPanel, "Next page", 88)
     nextPage:SetPoint("TOPRIGHT", -25, -5)
     local previousPage = makeControl(resultPanel, "Previous page", 101)
@@ -365,7 +366,8 @@ function Window.New(callbacks)
             searchMode:Disable()
         end
         resultTitle:SetText(enabled and "BROWSE QUESTS" or "SEARCH RESULTS")
-        metaTitle:SetText(enabled and "Status" or "Zone")
+        zoneTitle:SetShown(not enabled)
+        zoneTitle:SetText("Zone")
         if not enabled and catalog:IsShown() then search:SetFocus() end
     end
 
@@ -386,16 +388,23 @@ function Window.New(callbacks)
         return resultScroll:GetVerticalScroll()
     end
 
-    function window:Toggle()
-        if frame:IsShown() then
-            search:ClearFocus()
-            frame:Hide()
-        else
+    function window:Show()
+        if not frame:IsShown() then
             frame:SetScale(math.min(1, UIParent:GetWidth() / 1020, UIParent:GetHeight() / 642))
             frame:Show()
             if catalog:IsShown() and not browsing then
                 search:SetFocus()
             end
+        end
+        frame:Raise()
+    end
+
+    function window:Toggle()
+        if frame:IsShown() then
+            search:ClearFocus()
+            frame:Hide()
+        else
+            self:Show()
         end
     end
 
@@ -413,10 +422,11 @@ function Window.New(callbacks)
             row.title:SetWordWrap(true)
             row.title:SetMaxLines(2)
             row.meta:ClearAllPoints()
-            row.meta:SetPoint("TOPLEFT", metaX, -8)
-            row.meta:SetWidth(resultWidth - metaX - 8)
+            row.meta:SetPoint("TOPLEFT", zoneX, -8)
+            row.meta:SetWidth(statusX - zoneX - 8)
             row.questId = label(row, "GameFontHighlightSmall", colors.muted, idX, 8, levelX - idX - 8, "")
-            row.level = label(row, "GameFontHighlightSmall", colors.muted, levelX, 8, metaX - levelX - 8, "")
+            row.level = label(row, "GameFontHighlightSmall", colors.muted, levelX, 8, zoneX - levelX - 8, "")
+            row.logStatus = label(row, "GameFontHighlight", colors.muted, statusX, 7, resultWidth - statusX - 8, "")
             resultRows[index] = row
         end
         local inset = entry.indent and 16 or 0
@@ -430,6 +440,13 @@ function Window.New(callbacks)
         row.questId:SetText(entry.id and ("#" .. entry.id) or "")
         row.level:SetText(entry.level and tostring(entry.level) or "")
         row.meta:SetText(entry.detail or "")
+        local status = entry.id and statuses[callbacks.questLogStatus(entry.id)]
+        row.logStatus:SetText(status and status[1] or (entry.id and "Not in log" or ""))
+        if status then
+            row.logStatus:SetTextColor(status[2], status[3], status[4])
+        else
+            row.logStatus:SetTextColor(unpack(colors.muted))
+        end
         row:SetScript("OnClick", entry.action)
         local height = math.max(29, row.title:GetStringHeight() + 14)
         row:SetSize(resultWidth, height)
@@ -454,8 +471,10 @@ function Window.New(callbacks)
         resetScroll(resultScroll, resultBody, y, offset or 0)
     end
 
-    function window:ShowBrowse(entries, message, offset, page, pageCount)
+    function window:ShowBrowse(entries, message, offset, page, pageCount, dungeon)
         setPageControls(page, pageCount)
+        zoneTitle:SetText("Dungeon context")
+        zoneTitle:SetShown(dungeon)
         local y = startResults(message)
         for index, entry in ipairs(entries) do
             y = showResultRow(index, y, entry)

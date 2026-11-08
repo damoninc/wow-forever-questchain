@@ -270,6 +270,15 @@ function QuestData.New(lib)
         ids = quests.GetAllIds, summary = summary, read = read,
         pickupZones = pickupZones, classes = classes,
         dungeon = function(areaId) return dungeonsByArea[areaId] end,
+        categoryLevels = function(kind, key)
+            local mapId = kind == "zones" and positive(key) or (kind == "dungeons" and positive(mapIds[key]))
+            if mapId and C_Map.GetMapLevels then
+                local low, high = C_Map.GetMapLevels(mapId)
+                if positive(low) then
+                    return low, positive(high) and math.max(low, high) or low
+                end
+            end
+        end,
         zoneParent = function(mapId)
             local info = mapInfo(mapId)
             return info and info.parentMapID

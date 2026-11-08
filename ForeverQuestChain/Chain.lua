@@ -92,6 +92,10 @@ function Chain:Search(query)
         end
     end
     table.sort(results, function(left, right)
+        local leftLevel, rightLevel = left.level or math.huge, right.level or math.huge
+        if leftLevel ~= rightLevel then
+            return leftLevel < rightLevel
+        end
         local a, b = left.title:lower(), right.title:lower()
         if a == b then
             return left.id < right.id
@@ -249,12 +253,19 @@ function Chain:Build(focusId, limit, destination)
     }
 end
 
-function Chain:Status(id, player, view)
+function Chain.QuestLogStatus(id, player)
     if player.isActive(id) then
         return player.isReady(id) and "ready" or "active"
     end
     if player.isCompleted(id) then
         return "completed"
+    end
+end
+
+function Chain:Status(id, player, view)
+    local logStatus = Chain.QuestLogStatus(id, player)
+    if logStatus then
+        return logStatus
     end
     local quest = self.quests[id]
     if quest.minLevel and player.level < quest.minLevel then

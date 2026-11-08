@@ -10,7 +10,15 @@ QuestChain is an in-game quest-chain reference for **WoW: Forever**. Look up a q
 
 Search by title or quest ID. Linear steps run down the center of the timeline. Sibling branches sit side by side and reconnect at their shared next step. Hold **Shift** while scrolling to pan wide branches.
 
+Right-click a quest in WoW's Quest Log and choose **Open in QuestChain** to jump to its step. The quest details page also has an **Open in QuestChain** button beside **Back**.
+
 Open the **Browse** tab to search by name or ID, or choose **By category** for **Zones**, **Dungeons**, and **Classes**. Zone results follow pickup locations, so a chain can appear in several zones with different steps under each. **Current Zone**, **My Class**, and **Hide completed** help narrow the list. Selecting a quest opens the **Chain** tab at that step. Return to **Browse** to resume from the same list position.
+
+The **Quest log** column in Search and By category shows **In progress**, **Ready to turn in**, **Completed**, or **Not in log** for your current character.
+
+Catalog results sort by quest level, lowest first. A chain is listed by its lowest known quest level in the selected category, with its steps in chain order. Results without a known level appear at the end.
+
+Zone and dungeon pickers also sort by level and show a range when available. Ranges come from the game map when it supplies them, or from the category's quest levels. Dungeon results include linked steps outside the instance, labeled separately from quests assigned to that dungeon.
 
 In **Quest Details**, select **Show on map** under a pickup or turn-in location with known coordinates. The action opens the zone map and adds a TomTom waypoint if TomTom is enabled. Otherwise QuestChain marks the location until you close the world map. Use `/questchain` to return to the selected quest.
 

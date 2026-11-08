@@ -13,7 +13,7 @@ Keep the path from search to an answer short. Prioritize a readable timeline, ac
 ## Player experience
 
 - `/questchain` opens the addon. Search by quest name or exact ID, including quests outside the current log. Use quest IDs internally and show enough context to distinguish duplicate titles.
-- Browse groups quests by chain under pickup zone, verified dungeon assignment, or class. A cross-zone chain can appear in each zone with the steps picked up there. Selecting a Browse result opens the timeline at that step.
+- Browse groups quests by chain under pickup zone, verified dungeon assignment, or class. A cross-zone chain can appear in each zone with the steps picked up there. Dungeon results include linked chain steps with their dungeon context. Zone and dungeon pickers sort by level, as do catalog results. Selecting a Browse result opens the timeline at that step.
 - The Adventure Guide window uses persistent Browse and Chain tabs. Browse fills the window body and offers Search and By category. Keep filters and page controls outside the scrolling results, and preserve the catalog's mode and position while viewing a chain. The Chain page gives the timeline most of the space and keeps quest details on the right.
 - The approved timeline runs top to bottom. Center linear steps, place sibling steps side by side, and draw connectors where paths split or rejoin. Label all-required and any-one-required joins. Keep cards readable on wide forks and support horizontal panning with Shift + mouse wheel.
 - Selecting a search result brings its step into view. Clicking a step within the chain updates the detail panel and preserves the scroll position. Mark the selected step separately from progress, and use text as well as color for quest status.

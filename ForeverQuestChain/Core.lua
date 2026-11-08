@@ -143,10 +143,13 @@ end
 
 local function openQuest(id, destination)
     local nextView = model:Build(id, nil, destination)
-    if nextView then
-        view = nextView
-        selectStep(id, id)
+    if not nextView then
+        return false
     end
+    view = nextView
+    window:Show()
+    selectStep(id, id)
+    return true
 end
 
 local function search(query)
@@ -181,21 +184,25 @@ local function updateBrowseCategories()
             shortcutKey, shortcutLabel = token, "My Class"
         end
         for _, category in ipairs(browseIndex:Categories(browse.kind)) do
+            local name = category.name
             if category.key == shortcutKey then
-                table.insert(options, 1, { key = category.key, name = category.name .. " (" .. shortcutLabel .. ")" })
+                name = name .. " (" .. shortcutLabel .. ")"
+            end
+            if browse.kind ~= "classes" and category.minLevel then
+                name = name .. "  /  Lv " .. category.minLevel
+                if category.maxLevel > category.minLevel then
+                    name = name .. "-" .. category.maxLevel
+                end
+            end
+            local option = { key = category.key, name = name }
+            if category.key == shortcutKey then
+                table.insert(options, 1, option)
             else
-                options[#options + 1] = category
+                options[#options + 1] = option
             end
         end
     end
     window:SetBrowseCategories(options, browsePrompts[browse.kind])
-end
-
-local function progress(id)
-    if player.isActive(id) then
-        return player.isReady(id) and "Ready to turn in" or "In progress"
-    end
-    return player.isCompleted(id) and "Completed" or "Unstarted"
 end
 
 local function showBrowse(offset)
@@ -219,15 +226,23 @@ local function showBrowse(offset)
             local group, step = row.group, row.step
             if step then
                 local quest = step.quest
+                local detail
+                if browse.kind == "dungeons" then
+                    if step.dungeon then
+                        detail = step.dungeon.key == browse.category and "Dungeon quest" or step.dungeon.name
+                    else
+                        detail = "Outside dungeon"
+                    end
+                end
                 entries[#entries + 1] = {
                     title = quest.title, indent = not group.standalone,
-                    id = quest.id, level = quest.level, detail = progress(quest.id),
+                    id = quest.id, level = quest.level, detail = detail,
                     action = function() openQuest(quest.id, step.destination) end,
                 }
             else
                 local collapsed = browse.collapsed[group.key]
                 entries[#entries + 1] = {
-                    title = (collapsed and "+ " or "- ") .. group.title, heading = true,
+                    title = (collapsed and "+ " or "- ") .. group.title, heading = true, level = group.level,
                     action = function()
                         browse.collapsed[group.key] = not collapsed
                         showBrowse(window:ResultOffset())
@@ -236,7 +251,7 @@ local function showBrowse(offset)
             end
         end
     end
-    window:ShowBrowse(entries, message, offset, pageNumber, pageCount)
+    window:ShowBrowse(entries, message, offset, pageNumber, pageCount, browse.kind == "dungeons")
 end
 
 local function setBrowseMode(enabled)
@@ -279,10 +294,11 @@ local function setBrowseMode(enabled)
     showBrowse(browse.offset)
 end
 
-SlashCmdList.FOREVERQUESTCHAIN = function()
+local function getWindow()
     if not window then
         window = ns.Window.New({
             search = search, openQuest = openQuest, selectStep = selectStep, setBrowseMode = setBrowseMode,
+            questLogStatus = function(id) return ns.Chain.QuestLogStatus(id, player) end,
             browseKinds = browseKinds,
             browseKind = function() return browse.kind end,
             browseCategory = function() return browse.category end,
@@ -309,7 +325,72 @@ SlashCmdList.FOREVERQUESTCHAIN = function()
             end,
         })
     end
-    window:Toggle()
+    return window
+end
+
+SlashCmdList.FOREVERQUESTCHAIN = function()
+    getWindow():Toggle()
+end
+
+local questLogAction = "Open in QuestChain"
+
+local function openQuestFromLog(id)
+    getWindow()
+    if not openQuest(id) then
+        print("QuestChain: Quest #" .. id .. " is unavailable in QuestieDB.")
+    end
+end
+
+local function addQuestLogAction(owner, menu)
+    local id = owner and owner.questID
+    -- The gamepad quest details menu is owned by the map, rather than the quest row.
+    if not id and owner == WorldMapFrame and QuestMapFrame and QuestMapFrame.DetailsFrame then
+        id = QuestMapFrame.DetailsFrame.questID
+    end
+    if type(id) ~= "number" or id <= 0 then
+        return
+    end
+    menu:CreateButton(questLogAction, function() openQuestFromLog(id) end)
+end
+
+if Menu and Menu.ModifyMenu then
+    Menu.ModifyMenu("MENU_QUEST_MAP_LOG_TITLE", addQuestLogAction)
+    Menu.ModifyMenu("MENU_QUEST_LOG_POPUP_DETAIL_FRAME", addQuestLogAction)
+end
+
+local questDetailsButton
+
+local function showQuestDetailsButton()
+    local details = QuestMapFrame and QuestMapFrame.DetailsFrame
+    local header = details and details.BackFrame
+    if not header or not header.BackButton then
+        return
+    end
+    if not questDetailsButton then
+        local button = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
+        button:SetPoint("LEFT", header.BackButton, "RIGHT", 6, 0)
+        button:SetScript("OnClick", function()
+            if details.questID then openQuestFromLog(details.questID) end
+        end)
+        button:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(questLogAction)
+            GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        questDetailsButton = button
+    end
+    local notice = header.AccountCompletedNotice
+    local compact = notice and notice:IsShown()
+    questDetailsButton:SetSize(compact and 36 or 126, 22)
+    questDetailsButton:SetText(compact and "QC" or questLogAction)
+end
+
+if type(QuestMapFrame_ShowQuestDetails) == "function" then
+    hooksecurefunc("QuestMapFrame_ShowQuestDetails", showQuestDetailsButton)
+    if QuestMapFrame and QuestMapFrame.DetailsFrame and QuestMapFrame.DetailsFrame:IsShown() then
+        showQuestDetailsButton()
+    end
 end
 
 local function itemInRewards(rewardView, itemId)
@@ -328,6 +409,7 @@ events:RegisterEvent("QUEST_DATA_LOAD_RESULT")
 events:RegisterEvent("QUEST_LOG_UPDATE")
 events:RegisterEvent("QUEST_ACCEPTED")
 events:RegisterEvent("QUEST_TURNED_IN")
+events:RegisterEvent("QUEST_REMOVED")
 events:RegisterEvent("PLAYER_LEVEL_UP")
 events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 events:SetScript("OnEvent", function(_, event, id, success)
@@ -350,8 +432,13 @@ events:SetScript("OnEvent", function(_, event, id, success)
         refreshChain()
         showDetails(selectedId, rewards:Get(selectedId))
     end
-    if browsing and browseIndex and browse.category
-        and (event == "QUEST_LOG_UPDATE" or event == "QUEST_ACCEPTED" or event == "QUEST_TURNED_IN") then
-        showBrowse(window:ResultOffset())
+    if not window then return end
+    if event == "QUEST_LOG_UPDATE" or event == "QUEST_ACCEPTED"
+        or event == "QUEST_TURNED_IN" or event == "QUEST_REMOVED" then
+        if browsing and browseIndex and browse.category then
+            showBrowse(window:ResultOffset())
+        elseif not browsing and #searchResults > 0 then
+            window:ShowResults(searchResults, searchMessage, window:ResultOffset())
+        end
     end
 end)

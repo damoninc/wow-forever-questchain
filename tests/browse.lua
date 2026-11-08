@@ -21,14 +21,21 @@ local records = {
     [9] = quest("General Training", { requiredClasses = 131 }),
 }
 records[1].breadcrumbs, records[4].breadcrumbs = { 6 }, { 6 }
+records[1].questLevel, records[3].questLevel = 30, 20
 for id = 10, 94 do
     records[id] = quest("Local errand " .. id, { startedBy = { { 11 } } })
 end
+records[10].questLevel, records[11].questLevel = 25, 5
+records[94].questLevel, records[94].zoneOrSort = 10, 717
 
 C_Map = {
     GetMapInfo = function(id)
         return ({ [1] = { name = "Stormwind" }, [2] = { name = "Westfall" },
             [3] = { name = "Moonbrook", parentMapID = 2 } })[id]
+    end,
+    GetMapLevels = function(id)
+        if id == 1 then return 20, 30 end
+        if id == 2 then return 10, 19 end
     end,
 }
 
@@ -68,6 +75,8 @@ local work = coroutine.create(function() return ns.Browse.Build(model, source, c
 assert(coroutine.resume(work))
 assert(coroutine.status(work) == "suspended" and model.quests == nil and spawnCalls == 0)
 assert(model:Search("A Lead")[1].id == 2)
+local search = model:Search("Local errand")
+assert(search[1].id == 11 and search[2].id == 94 and search[3].id == 10 and search[4].id == 12)
 local browse
 while coroutine.status(work) ~= "dead" do
     local ok, result = coroutine.resume(work)
@@ -83,6 +92,8 @@ local stormwind = browse:Groups("zones", 1)
 local westfall = browse:Groups("zones", 2)
 local stormwindPlot, westfallPlot = groupWith(stormwind, 1), groupWith(westfall, 1)
 assert(#stormwind > 80 and #stormwindPlot.steps == 3)
+assert(stormwind[1].key == 11 and stormwind[2].key == 94 and stormwind[3].key == 1 and stormwind[4].key == 10)
+assert(stormwindPlot.level == 20 and stormwindPlot.steps[1].quest.id == 1)
 assert(#westfallPlot.steps == 2 and westfallPlot.steps[1].quest.id == 5)
 assert(westfallPlot.steps[1].destination == 2 and westfallPlot.steps[2].quest.id == 2)
 assert(groupWith(westfall, 6).steps[1].quest.id == 6)
@@ -91,8 +102,19 @@ assert(browse:MatchZone(3).key == 2)
 assert(spawnCalls == 3)
 
 local dungeonGroups = browse:Groups("dungeons", 1581)
-assert(#dungeonGroups == 1 and #dungeonGroups[1].steps == 2)
+assert(#dungeonGroups == 1 and #dungeonGroups[1].steps == 4)
+local dungeonSteps = {}
+for _, step in ipairs(dungeonGroups[1].steps) do dungeonSteps[step.quest.id] = step end
+assert(dungeonSteps[1] and not dungeonSteps[1].dungeon)
+assert(dungeonSteps[2].dungeon.key == 1581 and dungeonSteps[3].dungeon.key == 1581)
+assert(dungeonSteps[5].destination == 2 and not dungeonSteps[6])
+assert(#browse:Groups("dungeons", 717) == 1 and browse:Groups("dungeons", 717)[1].standalone)
 assert(#browse:Groups("dungeons", 2717) == 0)
+local zonesByLevel = browse:Categories("zones")
+assert(zonesByLevel[1].key == 2 and zonesByLevel[1].minLevel == 10 and zonesByLevel[1].maxLevel == 19)
+local dungeonsByLevel = browse:Categories("dungeons")
+assert(dungeonsByLevel[1].key == 717 and dungeonsByLevel[1].minLevel == 10)
+assert(dungeonsByLevel[2].key == 1581 and dungeonsByLevel[2].minLevel == 20 and dungeonsByLevel[2].maxLevel == 20)
 assert(#browse:Groups("classes", "MAGE") == 2)
 assert(#browse:Groups("classes", "WARRIOR") == 1)
 assert(#browse:Groups("classes", "PALADIN") == 0)

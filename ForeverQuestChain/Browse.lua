@@ -107,11 +107,16 @@ function Browse.Build(model, source, yieldWork)
     table.sort(ids)
     local nodes = groupQuests(quests, neighbors, ids)
     local byKind = { zones = {}, dungeons = {}, classes = {} }
+    local steps = {}
     local function add(kind, category, step, chain)
         local index = byKind[kind]
         local bucket = index[category.key]
         if not bucket then
             bucket = { key = category.key, name = category.name, byGroup = {}, groups = {} }
+            if kind ~= "classes" and source.categoryLevels then
+                bucket.minLevel, bucket.maxLevel = source.categoryLevels(kind, category.key)
+                bucket.hasMapLevels = bucket.minLevel ~= nil
+            end
             index[category.key] = bucket
         end
         local group = bucket.byGroup[chain.key]
@@ -121,18 +126,41 @@ function Browse.Build(model, source, yieldWork)
             bucket.groups[#bucket.groups + 1] = group
         end
         group.steps[#group.steps + 1] = step
+        local level = step.quest.level
+        local belongs = kind ~= "dungeons" or (step.dungeon and step.dungeon.key == category.key)
+        if level and belongs then
+            group.level = math.min(group.level or level, level)
+            if kind ~= "classes" and bucket.key ~= unknownZone.key and not bucket.hasMapLevels then
+                bucket.minLevel = math.min(bucket.minLevel or level, level)
+                bucket.maxLevel = math.max(bucket.maxLevel or level, level)
+            end
+        end
     end
     for index, id in ipairs(ids) do
         local quest, node = quests[id], nodes[id]
         local chain = node.browseGroup or node.group
-        local step = { quest = quest, order = node.order, destination = node.destination }
+        local dungeon = source.dungeon(quest.areaId)
+        local step = { quest = quest, order = node.order, destination = node.destination, dungeon = dungeon }
+        steps[index] = step
         local zones = source.pickupZones(id)
         if #zones == 0 then zones = { unknownZone } end
         for _, category in ipairs(zones) do add("zones", category, step, chain) end
-        local dungeon = source.dungeon(quest.areaId)
-        if dungeon then add("dungeons", dungeon, step, chain) end
+        if dungeon then
+            chain.dungeons = chain.dungeons or {}
+            chain.dungeons[dungeon.key] = dungeon
+        end
         for _, category in ipairs(source.classes(quest.zoneOrSort, quest.classMask)) do
             add("classes", category, step, chain)
+        end
+        if yieldWork and index % 80 == 0 then yieldWork() end
+    end
+    -- A verified dungeon quest anchors the group. Show the rest of that
+    -- chain as context without giving those quests a new dungeon assignment.
+    for index, step in ipairs(steps) do
+        local node = nodes[step.quest.id]
+        local chain = node.browseGroup or node.group
+        if chain.dungeons then
+            for _, dungeon in pairs(chain.dungeons) do add("dungeons", dungeon, step, chain) end
         end
         if yieldWork and index % 80 == 0 then yieldWork() end
     end
@@ -148,7 +176,11 @@ end
 function Browse:Categories(kind)
     local results = {}
     for _, category in pairs(self.byKind[kind]) do results[#results + 1] = category end
-    table.sort(results, byName)
+    table.sort(results, function(left, right)
+        local leftLevel, rightLevel = left.minLevel or math.huge, right.minLevel or math.huge
+        if kind ~= "classes" and leftLevel ~= rightLevel then return leftLevel < rightLevel end
+        return byName(left, right)
+    end)
     return results
 end
 
@@ -157,6 +189,10 @@ function Browse:Groups(kind, key)
     if not category then return {} end
     if not category.sorted then
         table.sort(category.groups, function(a, b)
+            local aLevel, bLevel = a.level or math.huge, b.level or math.huge
+            if aLevel ~= bLevel then
+                return aLevel < bLevel
+            end
             local left, right = a.title:lower(), b.title:lower()
             if left == right then return a.key < b.key end
             return left < right
