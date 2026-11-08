@@ -25,6 +25,12 @@ Select a step to see its objectives, prerequisites, pickup and turn-in informati
 
 Run `lua tests/chain.lua`, `lua tests/rewards.lua`, `lua tests/timeline.lua`, and `lua tests/browse.lua` from the repository root with Lua 5.1. See [AGENTS.md](AGENTS.md) for the product goals and development guide.
 
+## Publishing
+
+The **Package QuestChain** workflow tests and packages pushes to `main` as Alpha builds. For a stable Release, update `## Version` in the TOC and push a matching tag such as `v0.1.1`. Download the installable ZIP from the workflow run's artifacts.
+
+To enable CurseForge uploads, create the project in the Authors Console and set the GitHub Actions repository variable `CF_PROJECT_ID` to its numeric ID. Store a CurseForge upload token as the Actions repository secret `CF_API_TOKEN`. The workflow matches the TOC interface to a CurseForge Forever game version. Once the project can receive uploads, run **Package QuestChain** manually on `main` to test the connection.
+
 ## Editor IntelliSense
 
 Open the repository root in VS Code with the [Lua extension](https://marketplace.visualstudio.com/items?itemName=sumneko.lua). From the repository root, run `pwsh -File ./tools/setup-intellisense.ps1`. If your game is installed elsewhere, pass the QuestieDB addon directory with `-QuestieDBPath`. Then reload the editor window.

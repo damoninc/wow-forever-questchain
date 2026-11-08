@@ -1,0 +1,98 @@
+name: Package QuestChain
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: questchain-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run Lua 5.1 tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1
+          for test in tests/*.lua; do
+            lua5.1 "$test"
+          done
+          luac5.1 -p ForeverQuestChain/*.lua
+
+      - name: Build installable ZIP
+        id: build
+        run: |
+          toc=ForeverQuestChain/ForeverQuestChain.toc
+          version=$(awk '/^## Version:/ {print $3; exit}' "$toc")
+          interface=$(awk '/^## Interface:/ {print $3; exit}' "$toc")
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$interface" =~ ^1[6-9][0-9]{3}$ ]]
+          game_version="$((interface / 10000)).$((interface / 100 % 100)).$((interface % 100))"
+          release_type=alpha
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+              echo "::error::The Git tag must match the addon TOC version (v$version)."
+              exit 1
+            fi
+            release_type=release
+          else
+            version="$version-alpha.${GITHUB_SHA:0:8}"
+          fi
+          zip="$RUNNER_TEMP/QuestChain-$version.zip"
+          git archive --format=zip --output="$zip" HEAD ForeverQuestChain
+          printf 'zip=%s\nversion=%s\nrelease_type=%s\ngame_version=%s\n' \
+            "$zip" "$version" "$release_type" "$game_version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: QuestChain-${{ steps.build.outputs.version }}
+          path: ${{ steps.build.outputs.zip }}
+          if-no-files-found: error
+
+      - name: Upload to CurseForge
+        env:
+          CF_PROJECT_ID: ${{ vars.CF_PROJECT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          ZIP: ${{ steps.build.outputs.zip }}
+          VERSION: ${{ steps.build.outputs.version }}
+          RELEASE_TYPE: ${{ steps.build.outputs.release_type }}
+          GAME_VERSION: ${{ steps.build.outputs.game_version }}
+        run: |
+          if [[ -z "$CF_PROJECT_ID" || -z "$CF_API_TOKEN" ]]; then
+            echo "::notice::CurseForge upload skipped. Set CF_PROJECT_ID and CF_API_TOKEN to enable uploads."
+            exit 0
+          fi
+          [[ "$CF_PROJECT_ID" =~ ^[1-9][0-9]*$ ]]
+          base_url=https://wow.curseforge.com/api
+          # CurseForge assigns game version type 88568 to WoW: Forever.
+          versions=$(curl --fail --silent --show-error --max-time 60 \
+            --header "X-Api-Token: $CF_API_TOKEN" "$base_url/game/versions")
+          version_id=$(jq -er --arg version "$GAME_VERSION" '
+            first(.[] | select(.gameVersionTypeID == 88568 and .name == $version) | .id)
+              // error("No CurseForge Forever version matches " + $version)
+          ' <<< "$versions")
+          changelog="Source commit: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
+          metadata=$(jq -cn --arg display "QuestChain $VERSION" --arg type "$RELEASE_TYPE" \
+            --arg changelog "$changelog" --argjson id "$version_id" \
+            '{displayName:$display, releaseType:$type, changelog:$changelog, gameVersions:[$id]}')
+          response=$(curl --fail-with-body --silent --show-error --max-time 120 \
+            --header "X-Api-Token: $CF_API_TOKEN" \
+            --form-string "metadata=$metadata" --form "file=@$ZIP;type=application/zip" \
+            "$base_url/projects/$CF_PROJECT_ID/upload-file") || {
+              printf '%s\n' "$response" >&2
+              exit 1
+            }
+          file_id=$(jq -er '.id | numbers' <<< "$response")
+          echo "Uploaded CurseForge file $file_id."
