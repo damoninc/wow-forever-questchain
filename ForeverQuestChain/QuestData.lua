@@ -66,6 +66,14 @@ function QuestData.New(lib)
         local info = mapId and mapInfo(mapId)
         return info and info.name
     end
+    local function zoneMapId(areaId)
+        local topArea, visited = areaId, {}
+        while positive(parents[topArea]) and not visited[topArea] do
+            visited[topArea] = true
+            topArea = parents[topArea]
+        end
+        return positive(mapIds[topArea]) or positive(mapIds[areaId])
+    end
 
     local function summary(id)
         if summaries[id] then
@@ -131,13 +139,7 @@ function QuestData.New(lib)
             for _, entityId in ipairs(starters[group] or {}) do
                 for areaId, points in pairs(getSpawns(group, entityId) or {}) do
                     if #points > 0 then
-                        local topArea = areaId
-                        local visited = {}
-                        while positive(parents[topArea]) and not visited[topArea] do
-                            visited[topArea] = true
-                            topArea = parents[topArea]
-                        end
-                        local mapId = positive(mapIds[topArea]) or positive(mapIds[areaId])
+                        local mapId = zoneMapId(areaId)
                         local info = mapId and mapInfo(mapId)
                         if info and info.name and (not info.mapType or info.mapType >= 3) and not seen[mapId] then
                             seen[mapId] = true
@@ -304,7 +306,7 @@ function QuestData.New(lib)
                 level = lib.Item.requiredLevel and positive(lib.Item.requiredLevel(id)),
             }
         end,
-        pickupZones = pickupZones, classes = classes,
+        pickupZones = pickupZones, zoneMapId = zoneMapId, classes = classes,
         dungeon = function(areaId) return dungeonsByArea[areaId] end,
         categoryLevels = function(kind, key)
             local mapId = kind == "zones" and positive(key) or (kind == "dungeons" and positive(mapIds[key]))

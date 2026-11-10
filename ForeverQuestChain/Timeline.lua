@@ -4,7 +4,7 @@ local Timeline = {}
 ns.Timeline = Timeline
 
 local margin, gap, minCardWidth, maxCardWidth = 16, 14, 112, 236
-local cardHeight, rowGap = 67, 27
+local baseCardHeight, rowGap = 67, 27
 local optionalLabels = {
     breadcrumb = "Optional lead-in",
     substitute = "Prerequisite alternative",
@@ -25,8 +25,9 @@ local function reaches(from, target, visited)
     return false
 end
 
-function Timeline.Layout(view, viewportWidth)
-    local layout = { cards = {}, segments = {}, notes = {}, width = viewportWidth, height = 0 }
+function Timeline.Layout(view, viewportWidth, extraCardHeight)
+    local cardHeight = baseCardHeight + (extraCardHeight or 0)
+    local layout = { cards = {}, segments = {}, notes = {}, incoming = {}, width = viewportWidth, height = 0 }
     local nodes, ordered, links = {}, {}, {}
     for index, quest in ipairs(view.quests) do
         local node = { id = quest.id, order = index, rank = 1, parents = {}, children = {} }
@@ -35,6 +36,9 @@ function Timeline.Layout(view, viewportWidth)
 
     local function connect(edge, from, to)
         links[#links + 1] = edge
+        local incoming = layout.incoming[to.id] or {}
+        layout.incoming[to.id] = incoming
+        incoming[#incoming + 1] = edge
         from.children[#from.children + 1] = to
         to.parents[#to.parents + 1] = from
     end
@@ -148,4 +152,21 @@ function Timeline.Layout(view, viewportWidth)
         end
     end
     return layout
+end
+
+function Timeline.EarlierSteps(layout, selectedId)
+    if not selectedId then return {} end
+    local earlier, queue, seen = {}, { selectedId }, { [selectedId] = true }
+    local index = 1
+    while queue[index] do
+        for _, edge in ipairs(layout.incoming[queue[index]] or {}) do
+            if not seen[edge.fromId] then
+                seen[edge.fromId] = true
+                earlier[#earlier + 1] = edge
+                queue[#queue + 1] = edge.fromId
+            end
+        end
+        index = index + 1
+    end
+    return earlier
 end

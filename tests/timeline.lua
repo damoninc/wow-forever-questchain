@@ -22,6 +22,9 @@ local cards = linear.cards
 assert(center(cards[1]) == center(cards[2]) and center(cards[2]) == center(cards[3]))
 assert(cards[1].y < cards[2].y and cards[2].y < cards[3].y)
 assert(#linear.segments == 2)
+local earlier = ns.Timeline.EarlierSteps(linear, 3)
+assert(#earlier == 2 and earlier[1].fromId == 2 and earlier[2].fromId == 1)
+assert(#ns.Timeline.EarlierSteps(linear, 1) == 0)
 
 -- The input's topological order completes one route before the other.
 local fork = layout({ 1, 2, 4, 3, 5, 6 }, {
@@ -32,12 +35,16 @@ assert(cards[2].y == cards[3].y and cards[4].y == cards[5].y)
 assert(cards[2].x + cards[2].width < cards[3].x)
 assert(center(cards[2]) == center(cards[4]) and center(cards[3]) == center(cards[5]))
 assert(center(cards[1]) == center(cards[6]) and cards[6].y > cards[5].y)
+earlier = ns.Timeline.EarlierSteps(fork, 6)
+assert(#earlier == 5 and earlier[1].fromId == 4 and earlier[2].fromId == 5 and earlier[5].fromId == 1)
 
 -- An alternative can appear after its target in the chain's input order.
 local optional = layout({ 1, 2, 3 }, { edge(1, 2, "all"), edge(3, 2, "substitute") })
 assert(optional.cards[1].y == optional.cards[3].y)
 assert(optional.cards[3].y < optional.cards[2].y)
 assert(optional.notes[3] == "Prerequisite alternative")
+earlier = ns.Timeline.EarlierSteps(optional, 2)
+assert(#earlier == 2 and earlier[2].kind == "substitute")
 local hasOptionalLine = false
 for _, segment in ipairs(optional.segments) do
     hasOptionalLine = hasOptionalLine or segment.optional
@@ -46,6 +53,7 @@ assert(hasOptionalLine)
 
 local broken = layout({ 1, 2 }, { edge(1, 2), edge(2, 1), edge(2, 2, "breadcrumb") })
 assert(broken.hasUnorderedLinks and #broken.segments == 1)
+assert(#ns.Timeline.EarlierSteps(broken, 1) == 0)
 
 -- Long connections should run around cards on intervening tiers.
 local long = layout({ 1, 2, 3 }, { edge(1, 2), edge(2, 3), edge(1, 3, "breadcrumb") })

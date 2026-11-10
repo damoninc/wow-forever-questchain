@@ -14,9 +14,9 @@ local model = ns.Chain.New(source, function()
     local faction = UnitFactionGroup and UnitFactionGroup("player")
     return source.characterFilter(raceId, faction)
 end)
-local window, view, selectedId
+local window, view, selectedId, chainCategory
 local browseIndex, browseBuilding, browsing
-local browse = { kind = "zones", page = 1, offset = 0 }
+local browse = { kind = "zones", page = 1, offset = 0, lastCategory = {} }
 local rewardCatalog, rewardBuilding, rewardState
 local searchResults, searchMessage, searchOffset = {}, "Search by name or quest ID.", 0
 local player = {
@@ -28,6 +28,22 @@ local player = {
 
 local function questLogStatus(id)
     return ns.Chain.QuestLogStatus(id, player)
+end
+
+local function partyOnQuest(id)
+    if not C_QuestLog.IsUnitOnQuest then return end
+    local members
+    for index = 1, GetNumSubgroupMembers() do
+        local unit = "party" .. index
+        if UnitIsConnected(unit) and C_QuestLog.IsUnitOnQuest(unit, id) then
+            local name, realm = UnitName(unit)
+            if name then
+                members = members or {}
+                members[#members + 1] = realm and realm ~= "" and (name .. "-" .. realm) or name
+            end
+        end
+    end
+    return members
 end
 
 local function known(value)
@@ -140,7 +156,7 @@ local function refreshChain(scrollToId, newLevel)
         local status, reason = model:Status(quest.id, player, view)
         statuses[quest.id] = { status = status, reason = reason }
     end
-    window:ShowChain(view, selectedId, statuses, scrollToId)
+    window:ShowChain(view, selectedId, statuses, scrollToId, chainCategory)
 end
 
 local function selectStep(id, scrollToId)
@@ -150,12 +166,40 @@ local function selectStep(id, scrollToId)
     showDetails(id, rewards:Select(id))
 end
 
-local function openQuest(id, destination)
+local function categoryForQuest(quest)
+    local classes = source.classes(quest.zoneOrSort, quest.classMask)
+    if #classes == 1 then return { kind = "classes", category = classes[1] } end
+    local dungeon = source.dungeon(quest.areaId)
+    if dungeon then return { kind = "dungeons", category = dungeon } end
+    local zones = source.pickupZones(quest.id)
+    if #zones == 0 then return end
+    if #zones == 1 then return { kind = "zones", category = zones[1] } end
+
+    local byMap = {}
+    for _, zone in ipairs(zones) do byMap[zone.key] = zone end
+    local recorded = byMap[source.zoneMapId(quest.areaId)]
+    if recorded then return { kind = "zones", category = recorded } end
+
+    local mapId, visited = C_Map.GetBestMapForUnit("player"), {}
+    while mapId and mapId > 0 and not visited[mapId] do
+        local current = byMap[mapId]
+        if current then return { kind = "zones", category = current } end
+        visited[mapId] = true
+        mapId = source.zoneParent(mapId)
+    end
+    return { kind = "zones" }
+end
+
+local function openQuest(id, destination, context)
     local nextView = model:Build(id, nil, destination)
     if not nextView then
         return false
     end
     view = nextView
+    chainCategory = context or categoryForQuest(model:GetQuest(id))
+    if chainCategory and chainCategory.category then
+        browse.lastCategory[chainCategory.kind] = chainCategory.category.key
+    end
     window:Show()
     selectStep(id, id)
     return true
@@ -242,7 +286,11 @@ local function showBrowse(offset)
             entries[#entries + 1] = {
                 title = group.title, id = group.standalone and quest.id or nil,
                 level = group.level, detail = detail, logStatus = row.status,
-                action = function() openQuest(quest.id, step.destination) end,
+                action = function()
+                    openQuest(quest.id, step.destination, {
+                        kind = browse.kind, category = browseIndex:Category(browse.kind, browse.category),
+                    })
+                end,
             }
         end
     end
@@ -343,12 +391,16 @@ local function openRewardCatalog()
     showRewardCatalog(window:RewardOffset())
 end
 
-local function setBrowseMode(enabled)
+local function setBrowseMode(enabled, kind, category)
     if browsing then
         browse.offset = window:ResultOffset()
     else
         searchOffset = window:ResultOffset()
     end
+    if kind and (kind ~= browse.kind or category ~= browse.category) then
+        browse.kind, browse.category, browse.page, browse.offset = kind, category, 1, 0
+    end
+    if kind and category then browse.lastCategory[kind] = category end
     browsing = enabled
     window:SetBrowseMode(enabled)
     if not enabled then
@@ -364,19 +416,26 @@ local function getWindow()
     if not window then
         window = ns.Window.New({
             search = search, openQuest = openQuest, selectStep = selectStep, setBrowseMode = setBrowseMode,
+            openLinkedQuest = function(id) openQuest(id, nil, chainCategory) end,
+            openBrowseCategory = function(kind, category)
+                setBrowseMode(true, kind, category)
+                window:SetCatalogOpen(true)
+            end,
             questLogStatus = questLogStatus,
+            partyOnQuest = partyOnQuest,
             browseKinds = browseKinds,
             browseKind = function() return browse.kind end,
             browseCategory = function() return browse.category end,
             selectBrowseKind = function(key)
                 if browse.kind ~= key then
-                    browse.kind, browse.category, browse.page = key, nil, 1
+                    browse.kind, browse.category, browse.page = key, browse.lastCategory[key], 1
                     updateBrowseCategories()
                     showBrowse(0)
                 end
             end,
             selectBrowseCategory = function(key)
                 if browse.category ~= key then
+                    browse.lastCategory[browse.kind] = key
                     browse.category, browse.page = key, 1
                     showBrowse(0)
                 end
@@ -392,6 +451,12 @@ local function getWindow()
             end,
             rewardPage = {
                 open = openRewardCatalog,
+                openQuest = function(id, destination)
+                    openQuest(id, destination, {
+                        kind = rewardState.kind,
+                        category = browseIndex:Category(rewardState.kind, rewardState.category),
+                    })
+                end,
                 kinds = { browseKinds[1], browseKinds[2] },
                 kind = function() return rewardState and rewardState.kind or "zones" end,
                 category = function() return rewardState.category end,
@@ -504,8 +569,24 @@ events:RegisterEvent("QUEST_TURNED_IN")
 events:RegisterEvent("QUEST_REMOVED")
 events:RegisterEvent("PLAYER_LEVEL_UP")
 events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+local partyEvents = {
+    GROUP_ROSTER_UPDATE = true,
+    UNIT_QUEST_LOG_CHANGED = true,
+    PARTY_MEMBER_ENABLE = true,
+    PARTY_MEMBER_DISABLE = true,
+}
+for event in pairs(partyEvents) do events:RegisterEvent(event) end
 events:SetScript("OnEvent", function(_, event, id, success)
-    if event == "QUEST_DATA_LOAD_RESULT" then
+    if partyEvents[event] then
+        if not window or (event == "UNIT_QUEST_LOG_CHANGED" and not (id and id:match("^party%d+$"))) then
+            return
+        end
+        refreshChain()
+        if not browsing and #searchResults > 0 then
+            window:ShowResults(searchResults, searchMessage, window:ResultOffset())
+        end
+        return
+    elseif event == "QUEST_DATA_LOAD_RESULT" then
         rewards:OnQuestDataLoaded(id, success)
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         if success and selectedId then

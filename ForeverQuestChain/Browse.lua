@@ -184,8 +184,12 @@ function Browse:Categories(kind)
     return results
 end
 
+function Browse:Category(kind, key)
+    return self.byKind[kind][key]
+end
+
 function Browse:Groups(kind, key)
-    local category = self.byKind[kind][key]
+    local category = self:Category(kind, key)
     if not category then return {} end
     if not category.sorted then
         table.sort(category.groups, function(a, b)

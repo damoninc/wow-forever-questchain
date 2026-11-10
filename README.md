@@ -12,9 +12,13 @@ Search by title or quest ID. Linear steps run down the center of the timeline. S
 
 Right-click a quest in WoW's Quest Log and choose **Open in QuestChain** to jump to its step. The quest details page also has an **Open in QuestChain** button beside **Back**.
 
+Use the breadcrumbs above the timeline to go back to Browse or reopen the current zone, dungeon, or class list. The trail keeps the category you opened the chain from. When opening from the quest log, it uses the selected quest's known category. A verified dungeon assignment takes priority over the pickup zone. **Earlier quests** jumps to a preceding step in the current chain.
+
 Open the **Browse** tab to search by name or ID, or choose **By category** for **Zones**, **Dungeons**, and **Classes**. Zone results follow pickup locations, so a chain can appear in several zones with different steps under each. **Current Zone**, **My Class**, and **Hide completed** help narrow the list. Selecting a quest opens the **Chain** tab at that step. Return to **Browse** to resume from the same list position.
 
 The **Quest log** column in Search and By category shows **In progress**, **Ready to turn in**, **Completed**, or **Not in log** for your current character.
+
+Search results and timeline cards show how many party members currently have that quest in their log. Hover the row or card for names. Party members can appear without installing QuestChain.
 
 In **By category**, choose **Show completed** to find finished quests in the selected zone, dungeon, or class. **Show all** clears the filter.
 

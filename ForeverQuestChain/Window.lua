@@ -98,6 +98,31 @@ local function makeControl(parent, title, width)
     return button
 end
 
+local function makeBreadcrumb(parent, current)
+    local button = CreateFrame("Button", nil, parent)
+    local color = current and colors.text or colors.accent
+    local text = font(button, "GameFontNormal", color)
+    text:SetPoint("LEFT")
+    text:SetJustifyV("MIDDLE")
+    text:SetWordWrap(false)
+    text:SetMaxLines(1)
+    button.crumbText = text
+    button:SetHeight(22)
+    button:SetScript("OnEnter", function() text:SetTextColor(unpack(current and colors.accent or colors.text)) end)
+    local function resetColor() text:SetTextColor(unpack(color)) end
+    button:SetScript("OnLeave", resetColor)
+    button:SetScript("OnHide", resetColor)
+    return button
+end
+
+local function setBreadcrumbText(button, title)
+    local text = button.crumbText
+    text:SetText(title)
+    local width = math.max(1, math.min(290, math.ceil(text:GetUnboundedStringWidth())))
+    text:SetWidth(width)
+    button:SetWidth(width)
+end
+
 local function makeBrowseMenu(parent, x, top, width)
     local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
     dropdown:SetPoint("TOPLEFT", x, -top)
@@ -118,6 +143,31 @@ local function setupCategoryMenu(dropdown, options, prompt, selected, choose)
     end)
 end
 
+local partyTextColor = { 0.55, 0.82, 1 }
+local partyLineHeight = 15
+
+local function hidePartyTooltip(row)
+    if GameTooltip and GameTooltip:IsOwned(row) then GameTooltip:Hide() end
+end
+
+local function addPartyStatus(row, x, y, width)
+    row.partyStatus = label(row, "GameFontHighlightSmall", partyTextColor, x, y, width, "")
+    row:SetScript("OnEnter", function(self)
+        if not self.partyNames then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Party members on this quest")
+        for _, name in ipairs(self.partyNames) do GameTooltip:AddLine(name, 1, 1, 1) end
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", hidePartyTooltip)
+    row:SetScript("OnHide", hidePartyTooltip)
+end
+
+local function setPartyStatus(row, members)
+    row.partyNames = members
+    row.partyStatus:SetText(members and ("Party: %d"):format(#members) or "")
+end
+
 local function makeTimelineButton(parent)
     local button = makeButton(parent, "BackdropTemplate")
     button:SetBackdrop(cardEdge)
@@ -127,6 +177,7 @@ local function makeTimelineButton(parent)
     button.meta:SetPoint("TOPLEFT", 8, -35)
     button.note = label(button, "GameFontHighlightSmall", colors.muted, 8, 49, 1, "")
     button.note:SetWordWrap(false)
+    addPartyStatus(button, 8, 63, 96)
     button.statusMark = button:CreateTexture(nil, "ARTWORK")
     button.statusMark:SetPoint("TOPLEFT")
     button.statusMark:SetPoint("BOTTOMLEFT")
@@ -254,7 +305,7 @@ local function createRewardPage(parent, top, height, callbacks)
                 row.meta:SetWidth(sourceWidth - 20)
                 row.title:SetText(quest.title)
                 row.meta:SetText("Open chain  /  #" .. quest.id .. (quest.level and ("  /  Level " .. quest.level) or ""))
-                row:SetScript("OnClick", function() callbacks.openQuest(quest.id, step.destination) end)
+                row:SetScript("OnClick", function() config.openQuest(quest.id, step.destination) end)
                 row:Show()
                 y = y + 46
             end
@@ -308,10 +359,25 @@ function Window.New(callbacks)
         createRewardPage(frame, bodyTop, bodyHeight, callbacks)
     local chainBody, chainScroll, chainWidth, chainPanel =
         panel(frame, 14, bodyTop, 650, bodyHeight, "QUEST TIMELINE")
-    chainScroll:SetPoint("TOPLEFT", 10, -85)
+    chainScroll:SetPoint("TOPLEFT", 10, -106)
     local chainTitle = label(chainPanel, "GameFontNormalHuge", colors.text, 12, 30, chainWidth, "")
     chainTitle:SetWordWrap(false)
     local chainContext = label(chainPanel, "GameFontHighlightSmall", colors.muted, 12, 59, chainWidth, "")
+    local browseCrumb = makeBreadcrumb(chainPanel)
+    setBreadcrumbText(browseCrumb, "Browse")
+    browseCrumb:SetPoint("TOPLEFT", 12, -77)
+    local kindSeparator = font(chainPanel, "GameFontHighlightSmall", colors.muted)
+    kindSeparator:SetText("›")
+    kindSeparator:SetPoint("LEFT", browseCrumb, "RIGHT", 8, 0)
+    local kindCrumb = makeBreadcrumb(chainPanel)
+    kindCrumb:SetPoint("LEFT", kindSeparator, "RIGHT", 8, 0)
+    local categorySeparator = font(chainPanel, "GameFontHighlightSmall", colors.muted)
+    categorySeparator:SetText("›")
+    categorySeparator:SetPoint("LEFT", kindCrumb, "RIGHT", 8, 0)
+    local categoryCrumb = makeBreadcrumb(chainPanel, true)
+    categoryCrumb:SetPoint("LEFT", categorySeparator, "RIGHT", 8, 0)
+    local earlierMenu = makeBrowseMenu(chainPanel, chainWidth - 133, 75, 155)
+    earlierMenu:SetDefaultText("Earlier quests")
     local detailBody, detailScroll, detailWidth, detailPanel =
         panel(frame, 674, bodyTop, 312, bodyHeight, "Quest Details", true)
     local catalog = CreateFrame("Frame", nil, frame)
@@ -462,6 +528,7 @@ function Window.New(callbacks)
         showPage(open and "browse" or "chain")
     end
 
+    browseCrumb:SetScript("OnClick", function() window:SetCatalogOpen(true) end)
     catalogTab:SetScript("OnClick", function() window:SetCatalogOpen(true) end)
     chainTab:SetScript("OnClick", function() window:SetCatalogOpen(false) end)
     rewardsTab:SetScript("OnClick", function()
@@ -481,6 +548,7 @@ function Window.New(callbacks)
         hideCompleted:SetShown(enabled)
         showCompleted:SetShown(enabled)
         if enabled then
+            kindMenu:GenerateMenu()
             browseMode:Disable()
             searchMode:Enable()
         else
@@ -559,6 +627,7 @@ function Window.New(callbacks)
             row.questId = label(row, "GameFontHighlightSmall", colors.muted, idX, 8, levelX - idX - 8, "")
             row.level = label(row, "GameFontHighlightSmall", colors.muted, levelX, 8, zoneX - levelX - 8, "")
             row.logStatus = label(row, "GameFontHighlight", colors.muted, statusX, 7, resultWidth - statusX - 8, "")
+            addPartyStatus(row, statusX, 24, resultWidth - statusX - 8)
             resultRows[index] = row
         end
         row:ClearAllPoints()
@@ -576,7 +645,9 @@ function Window.New(callbacks)
             row.logStatus:SetTextColor(unpack(colors.muted))
         end
         row:SetScript("OnClick", entry.action)
+        setPartyStatus(row, entry.party)
         local height = math.max(29, row.title:GetStringHeight() + 14)
+        if entry.party then height = math.max(height, 24 + partyLineHeight) end
         row:SetSize(resultWidth, height)
         row:Show()
         return y + height + 2
@@ -593,6 +664,7 @@ function Window.New(callbacks)
             local quest = results[index]
             y = showResultRow(index, y, {
                 title = quest.title, id = quest.id, level = quest.level, detail = quest.zone,
+                party = callbacks.partyOnQuest and callbacks.partyOnQuest(quest.id),
                 action = function() callbacks.openQuest(quest.id) end,
             })
         end
@@ -608,7 +680,46 @@ function Window.New(callbacks)
         resetScroll(resultScroll, resultBody, y, offset or 0)
     end
 
-    function window:ShowChain(view, selectedId, statusesById, scrollToId)
+    local function showChainNavigation(context, view, layout, selectedId)
+        local kind = context and context.kind
+        local category = context and context.category
+        kindSeparator:SetShown(kind ~= nil)
+        kindCrumb:SetShown(kind ~= nil)
+        categorySeparator:SetShown(category ~= nil)
+        categoryCrumb:SetShown(category ~= nil)
+        if kind then
+            for _, option in ipairs(callbacks.browseKinds) do
+                if option.key == kind then setBreadcrumbText(kindCrumb, option.name) end
+            end
+            kindCrumb:SetScript("OnClick", function()
+                callbacks.openBrowseCategory(kind, category and category.key)
+            end)
+        end
+        if category then
+            setBreadcrumbText(categoryCrumb, category.name)
+            categoryCrumb:SetScript("OnClick", function() callbacks.openBrowseCategory(kind, category.key) end)
+        end
+
+        local earlier = ns.Timeline.EarlierSteps(layout, selectedId)
+        earlierMenu:SetShown(#earlier > 0)
+        if #earlier > 0 then
+            local titles = {}
+            for _, quest in ipairs(view.quests) do titles[quest.id] = quest.title end
+            earlierMenu:SetupMenu(function(_, menu)
+                menu:SetScrollMode(280)
+                for _, edge in ipairs(earlier) do
+                    local id = edge.fromId
+                    local title = titles[id] .. "  /  #" .. id
+                    if edge.kind == "breadcrumb" or edge.kind == "substitute" then
+                        title = title .. "  /  " .. layout.notes[id]
+                    end
+                    menu:CreateButton(title, function() callbacks.selectStep(id, id) end)
+                end
+            end)
+        end
+    end
+
+    function window:ShowChain(view, selectedId, statusesById, scrollToId, context)
         if chainTab.isDisabled then PanelTemplates_SetTabEnabled(footer, 2, true) end
         local hasParent, optionalSource, structural = {}, {}, {}
         for _, edge in ipairs(view.edges) do
@@ -633,7 +744,14 @@ function Window.New(callbacks)
         hideAll(chainRows)
         hideAll(connectors)
         chainMessage:Hide()
-        local layout = ns.Timeline.Layout(view, chainWidth)
+        local partyById = {}
+        if callbacks.partyOnQuest then
+            for _, quest in ipairs(view.quests) do
+                partyById[quest.id] = callbacks.partyOnQuest(quest.id)
+            end
+        end
+        local layout = ns.Timeline.Layout(view, chainWidth, next(partyById) and partyLineHeight)
+        showChainNavigation(context, view, layout, selectedId)
         chainBody:SetWidth(layout.width)
         panHint:SetShown(layout.width > chainWidth)
 
@@ -680,6 +798,7 @@ function Window.New(callbacks)
             row.meta:SetTextColor(status[2], status[3], status[4])
             row.note:SetText(note)
             row.note:Show()
+            setPartyStatus(row, partyById[id])
             row.statusMark:SetColorTexture(status[2], status[3], status[4])
             row.statusMark:Show()
             row.background:SetColorTexture(unpack(id == selectedId and colors.selected or colors.card))
@@ -715,10 +834,11 @@ function Window.New(callbacks)
             row.title:SetText("Open linked quest #" .. id)
             row.meta:SetText("")
             row.note:Hide()
+            setPartyStatus(row, nil)
             row.statusMark:Hide()
             row.background:SetColorTexture(unpack(colors.card))
             row:SetBackdropBorderColor(unpack(colors.edge))
-            row:SetScript("OnClick", function() callbacks.openQuest(id) end)
+            row:SetScript("OnClick", function() callbacks.openLinkedQuest(id) end)
             row:Show()
             y = y + 36
         end
