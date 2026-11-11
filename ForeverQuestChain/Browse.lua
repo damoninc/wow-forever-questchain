@@ -68,9 +68,6 @@ local function groupQuests(quests, neighbors, ids)
             index = index + 1
         end
     end
-    for _, group in pairs(components) do
-        group.title = quests[group.start or group.key].title
-    end
     for _, id in ipairs(ids) do
         local node = nodes[id]
         if node.group.count == 1 and #node.optional > 0 then
@@ -97,6 +94,10 @@ local function groupQuests(quests, neighbors, ids)
             end
         end
     end
+    for _, group in pairs(components) do
+        group.title = quests[group.start or group.key].title
+        group.standalone = group.count == 1 and not group.hasOptional
+    end
     return nodes
 end
 
@@ -121,7 +122,7 @@ function Browse.Build(model, source, yieldWork)
         end
         local group = bucket.byGroup[chain.key]
         if not group then
-            group = { key = chain.key, title = chain.title, standalone = chain.count == 1 and not chain.hasOptional, steps = {} }
+            group = { key = chain.key, title = chain.title, standalone = chain.standalone, steps = {} }
             bucket.byGroup[chain.key] = group
             bucket.groups[#bucket.groups + 1] = group
         end
@@ -140,8 +141,8 @@ function Browse.Build(model, source, yieldWork)
         local quest, node = quests[id], nodes[id]
         local chain = node.browseGroup or node.group
         local dungeon = source.dungeon(quest.areaId)
-        local step = { quest = quest, order = node.order, destination = node.destination, dungeon = dungeon }
-        steps[index] = step
+        local step = { quest = quest, order = node.order, destination = node.destination, dungeon = dungeon, chain = chain }
+        steps[id] = step
         local zones = source.pickupZones(id)
         if #zones == 0 then zones = { unknownZone } end
         for _, category in ipairs(zones) do add("zones", category, step, chain) end
@@ -156,15 +157,15 @@ function Browse.Build(model, source, yieldWork)
     end
     -- A verified dungeon quest anchors the group. Show the rest of that
     -- chain as context without giving those quests a new dungeon assignment.
-    for index, step in ipairs(steps) do
-        local node = nodes[step.quest.id]
-        local chain = node.browseGroup or node.group
+    for index, id in ipairs(ids) do
+        local step = steps[id]
+        local chain = step.chain
         if chain.dungeons then
             for _, dungeon in pairs(chain.dungeons) do add("dungeons", dungeon, step, chain) end
         end
         if yieldWork and index % 80 == 0 then yieldWork() end
     end
-    return setmetatable({ byKind = byKind, source = source }, Browse)
+    return setmetatable({ byKind = byKind, source = source, steps = steps }, Browse)
 end
 
 local function byName(left, right)
@@ -223,6 +224,36 @@ function Browse:MatchZone(mapId)
 end
 
 local stepPriority = { ready = 4, active = 3, unstarted = 2, completed = 1 }
+
+function Browse:ActiveChains(logged)
+    local rows, byChain = {}, {}
+    for id, log in pairs(logged) do
+        local step = self.steps[id]
+        local chain = step and step.chain
+        if chain and not chain.standalone then
+            local row = byChain[chain.key]
+            if not row then
+                row = { key = chain.key, title = chain.title, count = 0, step = step, log = log }
+                byChain[chain.key] = row
+                rows[#rows + 1] = row
+            end
+            row.count = row.count + 1
+            local priority, selectedPriority = stepPriority[log.status], stepPriority[row.log.status]
+            if priority > selectedPriority or (priority == selectedPriority and step.order < row.step.order) then
+                row.step, row.log = step, log
+            end
+        end
+    end
+    table.sort(rows, function(a, b)
+        local aLevel = a.log.level or a.step.quest.level or math.huge
+        local bLevel = b.log.level or b.step.quest.level or math.huge
+        if aLevel ~= bLevel then return aLevel < bLevel end
+        local left, right = a.title:lower(), b.title:lower()
+        if left == right then return a.key < b.key end
+        return left < right
+    end)
+    return rows
+end
 
 function Browse:Rows(kind, key, filter, getStatus)
     local rows, standalone = {}, {}

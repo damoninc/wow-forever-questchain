@@ -133,10 +133,21 @@ local function requirementText(quest)
     return #lines > 0 and table.concat(lines, "\n") or nil
 end
 
+local function readQuestLogDetails(id)
+    local index = C_QuestLog.GetLogIndexForQuestID and C_QuestLog.GetLogIndexForQuestID(id)
+    if not index or index <= 0 then return end
+    local description, objectiveText = GetQuestLogQuestText(index)
+    return {
+        description = description,
+        objectiveText = objectiveText,
+        progress = C_QuestLog.GetQuestObjectives(id),
+    }
+end
+
 local function showDetails(id, rewardView)
     if window and id == selectedId then
         local quest = model:GetQuest(id)
-        window:ShowDetails(quest, rewardView, requirementText(quest))
+        window:ShowDetails(quest, rewardView, requirementText(quest), readQuestLogDetails(id))
     end
 end
 
@@ -203,6 +214,31 @@ local function openQuest(id, destination, context)
     window:Show()
     selectStep(id, id)
     return true
+end
+
+local function showActiveChains()
+    if not browseIndex then
+        window:ShowActiveChains({}, browseBuilding and "Loading active chains..." or "Quest chains unavailable.")
+        return
+    end
+    local logged, zone = {}, nil
+    for index = 1, C_QuestLog.GetNumQuestLogEntries() do
+        local info = C_QuestLog.GetInfo(index)
+        if info then
+            local id = info.questID
+            if info.isHeader then
+                zone = info.title
+            elseif id and id > 0 and not info.isHidden and not info.isTask
+                and (not info.isBounty or C_QuestLog.IsComplete(id)) then
+                local status = questLogStatus(id)
+                if status == "active" or status == "ready" then
+                    local level = info.level and info.level > 0 and info.level or nil
+                    logged[id] = { level = level, zone = zone, status = status }
+                end
+            end
+        end
+    end
+    window:ShowActiveChains(browseIndex:ActiveChains(logged))
 end
 
 local function search(query)
@@ -363,7 +399,13 @@ local function loadBrowseIndex()
             updateRewardCategories()
             showRewardCatalog(window:RewardOffset())
         end
+        if window:IsActiveChainsOpen() then showActiveChains() end
     end)
+end
+
+local function openActiveChains()
+    loadBrowseIndex()
+    showActiveChains()
 end
 
 local function openRewardCatalog()
@@ -422,6 +464,7 @@ local function getWindow()
                 window:SetCatalogOpen(true)
             end,
             questLogStatus = questLogStatus,
+            openActiveChains = openActiveChains,
             partyOnQuest = partyOnQuest,
             browseKinds = browseKinds,
             browseKind = function() return browse.kind end,
@@ -577,6 +620,7 @@ local partyEvents = {
 }
 for event in pairs(partyEvents) do events:RegisterEvent(event) end
 events:SetScript("OnEvent", function(_, event, id, success)
+    if event == "UNIT_QUEST_LOG_CHANGED" and id == "player" then event = "QUEST_LOG_UPDATE" end
     if partyEvents[event] then
         if not window or (event == "UNIT_QUEST_LOG_CHANGED" and not (id and id:match("^party%d+$"))) then
             return
@@ -608,6 +652,7 @@ events:SetScript("OnEvent", function(_, event, id, success)
     if not window then return end
     if event == "QUEST_LOG_UPDATE" or event == "QUEST_ACCEPTED"
         or event == "QUEST_TURNED_IN" or event == "QUEST_REMOVED" then
+        if window:IsActiveChainsOpen() then showActiveChains() end
         if browsing and browseIndex and browse.category then
             showBrowse(window:ResultOffset())
         elseif not browsing and #searchResults > 0 then

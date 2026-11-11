@@ -153,6 +153,25 @@ local allComplete = browse:Rows("zones", 2, nil, function() return "completed" e
 assert(#allComplete == 2 and allComplete[1].status == "completed")
 assert(browse:Rows("zones", 2, "incomplete", function() return "completed" end)[1] == nil)
 
+local activeChains = browse:ActiveChains({
+    [2] = { status = "active", zone = "Westfall" },
+    [3] = { status = "ready", zone = "Stormwind" },
+    [4] = { status = "active" },
+    [5] = { status = "active" },
+    [6] = { status = "active" },
+    [21] = { status = "active" },
+    [999] = { status = "active" },
+})
+assert(#activeChains == 2, "Only verified chains with a logged step should appear")
+assert(activeChains[1].title == "The Plot" and activeChains[1].count == 3,
+    "Cross-zone steps and a unique optional lead-in should share one row")
+assert(activeChains[1].step.quest.id == 3 and activeChains[1].log.zone == "Stormwind",
+    "Open the ready-to-turn-in step ahead of other active steps")
+assert(activeChains[2].step.quest.id == 21, "An active later step is enough to include a chain")
+local optionalChain = browse:ActiveChains({ [2] = { status = "active" }, [5] = { status = "active" } })[1]
+assert(optionalChain.step.quest.id == 5 and optionalChain.step.destination == 2,
+    "Open the first active step when statuses tie and preserve the optional destination")
+
 local view = model:Build(5, nil, westfallPlot.steps[1].destination)
 assert(view.focusId == 5 and #view.quests == 5)
 

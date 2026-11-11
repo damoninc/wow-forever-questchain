@@ -8,7 +8,6 @@ local colors = {
     text = { 1, 1, 1 },
     muted = { 0.76, 0.73, 0.66 },
     ink = { 0.16, 0.10, 0.05 },
-    inkHeading = { 0.31, 0.17, 0.07 },
     edge = { 0.41, 0.34, 0.23, 1 },
     card = { 0.10, 0.08, 0.06, 0.90 },
     selected = { 0.32, 0.23, 0.08 },
@@ -23,6 +22,7 @@ local statuses = {
     unstarted = { "Not started", 0.67, 0.69, 0.71 },
 }
 local itemFallbackIcon = 134400
+local panelInset = 36
 local cardEdge = { edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
 local questHighlight = "Interface\\QuestFrame\\UI-QuestTitleHighlight"
 
@@ -49,18 +49,11 @@ local function label(parent, template, color, x, y, width, value)
     return text
 end
 
-local function panel(parent, x, top, width, height, heading, parchment)
+local function panel(parent, x, top, width, height, heading)
     local frame = CreateFrame("Frame", nil, parent, "InsetFrameTemplate")
     frame:SetPoint("TOPLEFT", x, -top)
     frame:SetSize(width, height)
-    if parchment then
-        local paper = frame:CreateTexture(nil, "BACKGROUND", nil, -4)
-        paper:SetAtlas("QuestDetailsBackgrounds")
-        paper:SetPoint("TOPLEFT", 3, -3)
-        paper:SetPoint("BOTTOMRIGHT", -3, 3)
-    end
-    local title = label(frame, parchment and "QuestFont" or "GameFontNormalSmall",
-        parchment and colors.inkHeading or colors.accent, 12, 12, width - 24, heading)
+    local title = label(frame, "GameFontNormalSmall", colors.accent, 12, 12, width - 24, heading)
     local scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
     scroll:SetPoint("TOPLEFT", 10, -36)
     scroll:SetPoint("BOTTOMRIGHT", -26, 10)
@@ -72,7 +65,7 @@ local function panel(parent, x, top, width, height, heading, parchment)
         self:SetVerticalScroll(math.max(0, math.min(offset, self:GetVerticalScrollRange())))
     end)
     local content = CreateFrame("Frame", nil, scroll)
-    local contentWidth = width - 36
+    local contentWidth = width - panelInset
     content:SetSize(contentWidth, 1)
     scroll:SetScrollChild(content)
     return content, scroll, contentWidth, frame, title
@@ -115,10 +108,10 @@ local function makeBreadcrumb(parent, current)
     return button
 end
 
-local function setBreadcrumbText(button, title)
+local function setBreadcrumbText(button, title, maxWidth)
     local text = button.crumbText
     text:SetText(title)
-    local width = math.max(1, math.min(290, math.ceil(text:GetUnboundedStringWidth())))
+    local width = math.max(1, math.min(290, maxWidth or 290, math.ceil(text:GetUnboundedStringWidth())))
     text:SetWidth(width)
     button:SetWidth(width)
 end
@@ -146,7 +139,7 @@ end
 local partyTextColor = { 0.55, 0.82, 1 }
 local partyLineHeight = 15
 
-local function hidePartyTooltip(row)
+local function hideOwnedTooltip(row)
     if GameTooltip and GameTooltip:IsOwned(row) then GameTooltip:Hide() end
 end
 
@@ -159,8 +152,8 @@ local function addPartyStatus(row, x, y, width)
         for _, name in ipairs(self.partyNames) do GameTooltip:AddLine(name, 1, 1, 1) end
         GameTooltip:Show()
     end)
-    row:SetScript("OnLeave", hidePartyTooltip)
-    row:SetScript("OnHide", hidePartyTooltip)
+    row:SetScript("OnLeave", hideOwnedTooltip)
+    row:SetScript("OnHide", hideOwnedTooltip)
 end
 
 local function setPartyStatus(row, members)
@@ -191,10 +184,14 @@ local function hideAll(list)
     end
 end
 
-local function resetScroll(scroll, content, height, offset)
-    content:SetHeight(math.max(1, height))
+local function updateScroll(scroll, offset)
     scroll:UpdateScrollChildRect()
     scroll:SetVerticalScroll(math.max(0, math.min(offset, scroll:GetVerticalScrollRange())))
+end
+
+local function resetScroll(scroll, content, height, offset)
+    content:SetHeight(math.max(1, height))
+    updateScroll(scroll, offset)
 end
 
 local function itemName(item)
@@ -212,11 +209,244 @@ local function showTooltip(button)
     GameTooltip:Show()
 end
 
-local function createRewardPage(parent, top, height, callbacks)
+local function tryLinkReward(button)
+    if not IsModifiedClick("CHATLINK") then return false end
+    local item = button.reward
+    local link = item.link or select(2, C_Item.GetItemInfo(item.id))
+    return link and ChatFrameUtil.InsertLink(link)
+end
+
+local function questAtlas(parent, layer, atlas)
+    local texture = parent:CreateTexture(nil, layer)
+    texture:SetAtlas(atlas, true)
+    return texture
+end
+
+local function createQuestDetails(parent, top, width, height)
+    local frame = CreateFrame("Frame", nil, parent)
+    frame:SetPoint("TOPRIGHT", -14, -top)
+    frame:SetSize(width, height)
+    local paper = questAtlas(frame, "BACKGROUND", "QuestDetailsBackgrounds")
+    paper:SetPoint("TOPLEFT")
+    paper:SetPoint("BOTTOMRIGHT", -20, 0)
+    local header = questAtlas(frame, "BORDER", "questlog-reward-top-frame")
+    local headerHeight = 43
+    header:SetPoint("TOPLEFT")
+    header:SetPoint("TOPRIGHT", -20, 0)
+    header:SetHeight(headerHeight)
+    local border = CreateFrame("Frame", nil, frame, "QuestLogBorderFrameTemplate")
+    border:SetPoint("BOTTOMRIGHT", -17, -6)
+    frame.BackButton = makeControl(frame, BACK or "Back", 90)
+    frame.BackButton:SetPoint("TOPLEFT", 11, -10)
+
+    local contentWidth = width - 26
+    local scroll = CreateFrame("ScrollFrame", nil, frame, "ScrollFrameTemplate")
+    scroll:SetPoint("TOPLEFT", 3, -headerHeight - 7)
+    scroll:SetPoint("BOTTOMRIGHT", -23, 7)
+    scroll:EnableMouseWheel(true)
+    local body = CreateFrame("Frame", nil, scroll)
+    body:SetSize(contentWidth, 1)
+    scroll:SetScrollChild(body)
+
+    local tray = CreateFrame("Frame", nil, body)
+    tray:SetSize(contentWidth, 1)
+    tray:SetPoint("BOTTOMLEFT")
+    fill(tray, "BACKGROUND", 0.20, 0.11, 0.06)
+    local trayTop = questAtlas(tray, "BORDER", "questlog-reward-header-top")
+    trayTop:SetPoint("TOPLEFT")
+    trayTop:SetPoint("TOPRIGHT")
+    local trayBottom = questAtlas(tray, "BORDER", "questlog-reward-bottom")
+    trayBottom:SetPoint("BOTTOMLEFT")
+    trayBottom:SetPoint("BOTTOMRIGHT")
+    local trayBackground = tray:CreateTexture(nil, "BACKGROUND", nil, 1)
+    trayBackground:SetAtlas("questlog-reward-tile-vertical")
+    trayBackground:SetPoint("TOPLEFT", trayTop, "BOTTOMLEFT")
+    trayBackground:SetPoint("BOTTOMRIGHT")
+    local rewardTextColor = { 0.902, 0.788, 0.671 }
+    local trayTitle = label(tray, "QuestFont_Huge", rewardTextColor, 0, 22, contentWidth, REWARDS or "Rewards")
+    trayTitle:SetJustifyH("CENTER")
+    local choose = font(tray, "QuestMapRewardsFont", rewardTextColor)
+    local receive = font(tray, "QuestMapRewardsFont", rewardTextColor)
+    local detailLines, rewardRows, locationButtons = {}, {}, {}
+    local detailId, contentHeight
+
+    local function layoutDetails(offset)
+        if contentHeight then
+            -- Let short details fill the viewport. The tray remains part of the scroll child.
+            resetScroll(scroll, body, math.max(contentHeight, scroll:GetHeight()), offset)
+        end
+    end
+    scroll:HookScript("OnSizeChanged", function(self) layoutDetails(self:GetVerticalScroll()) end)
+
+    local function showDetails(_, quest, rewards, requirement, log)
+        local offset = detailId == quest.id and scroll:GetVerticalScroll() or 0
+        detailId = quest.id
+        hideAll(detailLines)
+        hideAll(rewardRows)
+        hideAll(locationButtons)
+        choose:Hide()
+        receive:Hide()
+        local contrast = QuestTextContrast
+        local parchment = contrast and contrast.GetDefaultDetailsBackgroundAtlas()
+        paper:SetAtlas(parchment or "QuestDetailsBackgrounds")
+        local textColor = contrast and contrast.UseLightText() and colors.text or colors.ink
+        local y, textCount, locationCount = 8, 0, 0
+        local function text(value, style, gap)
+            textCount = textCount + 1
+            local line = detailLines[textCount] or font(body, "QuestFont", textColor)
+            detailLines[textCount] = line
+            line:SetFontObject(style or "QuestFont")
+            line:SetTextColor(unpack(textColor))
+            line:SetPoint("TOPLEFT", 8, -y)
+            line:SetWidth(contentWidth - 16)
+            line:SetText(value)
+            line:Show()
+            y = y + line:GetStringHeight() + (gap or 5)
+        end
+        local function listLocations(heading, locations)
+            text(heading, "QuestTitleFont")
+            if #locations == 0 then text("Unavailable") end
+            for _, location in ipairs(locations) do
+                local value = location.name
+                if location.zone then value = value .. "  /  " .. location.zone end
+                if location.x then value = value .. ("  %.1f, %.1f"):format(location.x, location.y) end
+                text(value)
+                if location.mapId then
+                    locationCount = locationCount + 1
+                    local button = locationButtons[locationCount] or makeControl(body, "Show on map", 108)
+                    locationButtons[locationCount] = button
+                    button:SetPoint("TOPLEFT", 8, -y)
+                    button:SetScript("OnClick", function()
+                        if ns.Map.Show(location) then
+                            parent:Hide()
+                        else
+                            print("QuestChain: The world map could not open to this location.")
+                        end
+                    end)
+                    button:Show()
+                    y = y + 32
+                end
+            end
+        end
+
+        text(quest.title, "QuestTitleFont", 2)
+        local objectiveText = log and log.objectiveText
+        if not objectiveText or objectiveText == "" then
+            objectiveText = #quest.objectives > 0 and table.concat(quest.objectives, "\n") or "Unavailable"
+        end
+        text(objectiveText, nil, 8)
+        for _, objective in ipairs(log and log.progress or {}) do
+            if objective.text and objective.text ~= "" and objective.type ~= "spell" and objective.type ~= "log" then
+                local value = objective.finished and (objective.text .. " (" .. (COMPLETE or "Complete") .. ")")
+                    or objective.text
+                text(value, "QuestFontNormalSmall", 2)
+            end
+        end
+        y = y + 12
+        text(QUEST_DESCRIPTION or "Description", "QuestTitleFont", 2)
+        local description = log and log.description
+        text(description and description ~= "" and description or "Unavailable", nil, 15)
+        local context = "#" .. quest.id .. (quest.level and ("  /  Level " .. quest.level) or "")
+        text(context .. (quest.zone and ("  /  " .. quest.zone) or ""), "QuestFontNormalSmall", 10)
+        if requirement then
+            text("Prerequisites", "QuestTitleFont")
+            text(requirement, nil, 12)
+        end
+        listLocations("Starts at", quest.starters)
+        listLocations("Turns in at", quest.finishers)
+
+        local rewardY, count, column = 53, 0, 0
+        local function endRow()
+            if column ~= 0 then
+                rewardY = rewardY + 34
+                column = 0
+            end
+        end
+        local function rewardHeading(heading, value)
+            endRow()
+            heading:SetPoint("TOPLEFT", 8, -rewardY)
+            heading:SetWidth(contentWidth - 16)
+            heading:SetText(value)
+            heading:Show()
+            rewardY = rewardY + heading:GetStringHeight() + 5
+        end
+        local function rewardSlot(name, icon, item)
+            count = count + 1
+            local row = rewardRows[count]
+            if not row then
+                row = CreateFrame("Button", nil, tray, "SmallItemButtonTemplate")
+                row:SetScript("OnClick", function(self) if self.reward then tryLinkReward(self) end end)
+                row:SetScript("OnEnter", function(self) if self.reward then showTooltip(self) end end)
+                row:SetScript("OnLeave", hideOwnedTooltip)
+                row:SetScript("OnHide", hideOwnedTooltip)
+                rewardRows[count] = row
+            end
+            row.reward = item
+            row:SetPoint("TOPLEFT", 8 + column * 136, -rewardY)
+            row.Icon:SetTexture(icon)
+            row.Name:SetText(name)
+            row.Count:SetText(item and item.quantity > 1 and tostring(item.quantity) or "")
+            row:Show()
+            column = column + 1
+            if column == 2 then endRow() end
+        end
+        local function fieldStatus(field)
+            return field.state == "loading" and "Loading" or "Unavailable"
+        end
+        local function hasItems(field)
+            return field.state ~= "known" or #field.value > 0
+        end
+        local function rewardItems(field)
+            if field.state ~= "known" then
+                rewardSlot(fieldStatus(field), itemFallbackIcon)
+                endRow()
+                return
+            end
+            for _, item in ipairs(field.value) do
+                rewardSlot(itemName(item), item.icon or C_Item.GetItemIconByID(item.id) or itemFallbackIcon, item)
+            end
+            endRow()
+        end
+        local function rewardAmount(field, icon, formatValue)
+            if field.state ~= "known" then
+                rewardSlot(fieldStatus(field), icon)
+            elseif field.value > 0 then
+                rewardSlot(formatValue(field.value), icon)
+            end
+        end
+
+        local choices, guaranteed = rewards.choices, rewards.guaranteed
+        local showChoices = hasItems(choices)
+        if showChoices then
+            rewardHeading(choose, REWARD_CHOICES or "Choose one:")
+            rewardItems(choices)
+        end
+        local function money(copper)
+            return GetMoneyString(copper, false, true)
+        end
+        if hasItems(guaranteed) or rewards.xp.value ~= 0 or rewards.copper.value ~= 0 then
+            local heading = showChoices and REWARD_ITEMS or REWARD_ITEMS_ONLY
+            rewardHeading(receive, heading or "You will receive:")
+            rewardAmount(rewards.xp, "Interface\\Icons\\XP_Icon", BreakUpLargeNumbers)
+            rewardAmount(rewards.copper, "Interface\\Icons\\inv_misc_coin_01", money)
+            endRow()
+            rewardItems(guaranteed)
+        elseif not showChoices then
+            rewardHeading(receive, "No rewards")
+        end
+        tray:SetHeight(rewardY + 12)
+        contentHeight = y + 8 + tray:GetHeight()
+        layoutDetails(offset)
+    end
+
+    return frame, showDetails
+end
+
+local function createRewardPage(parent, top, width, height, callbacks)
     local config = callbacks.rewardPage
     local frame = CreateFrame("Frame", nil, parent)
     frame:SetPoint("TOPLEFT", 14, -top)
-    frame:SetSize(972, height)
+    frame:SetSize(width, height)
     local kind = makeBrowseMenu(frame, 12, 28, 168)
     setupCategoryMenu(kind, config.kinds, nil, config.kind, config.selectKind)
     local category = makeBrowseMenu(frame, 200, 28, 312)
@@ -237,8 +467,14 @@ local function createRewardPage(parent, top, height, callbacks)
     query:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     query:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 
-    local list, listScroll, listWidth, _, listTitle = panel(frame, 0, 63, 620, height - 63, "QUEST REWARDS")
-    local sources, sourceScroll, sourceWidth = panel(frame, 630, 63, 342, height - 63, "REWARD SOURCES")
+    local filtersHeight, sourcesWidth, gap = 63, 342, 10
+    local listPanelWidth = width - sourcesWidth - gap
+    local list, listScroll, listWidth, listPanel, listTitle =
+        panel(frame, 0, filtersHeight, listPanelWidth, height - filtersHeight, "QUEST REWARDS")
+    local sources, sourceScroll, sourceWidth, sourcePanel =
+        panel(frame, listPanelWidth + gap, filtersHeight, sourcesWidth, height - filtersHeight, "REWARD SOURCES")
+    sourcePanel:ClearAllPoints()
+    sourcePanel:SetPoint("TOPRIGHT", 0, -filtersHeight)
     local listMessage = label(list, "GameFontHighlightSmall", colors.muted, 2, 4, listWidth - 4, "")
     local sourceTitle = label(sources, "GameFontNormalLarge", colors.accent, 2, 4, sourceWidth - 4, "")
     local sourceMeta = font(sources, "GameFontHighlightSmall", colors.muted)
@@ -260,10 +496,10 @@ local function createRewardPage(parent, top, height, callbacks)
                 row:SetSize(listWidth, 38)
                 row.title:ClearAllPoints()
                 row.title:SetPoint("TOPLEFT", 42, -6)
-                row.title:SetWidth(listWidth - 50)
+                row.title:SetPoint("TOPRIGHT", -8, -6)
                 row.meta:ClearAllPoints()
                 row.meta:SetPoint("TOPLEFT", 42, -22)
-                row.meta:SetWidth(listWidth - 50)
+                row.meta:SetPoint("TOPRIGHT", -8, -22)
                 row.icon = row:CreateTexture(nil, "ARTWORK")
                 row.icon:SetPoint("LEFT", 5, 0)
                 row.icon:SetSize(28, 28)
@@ -271,6 +507,9 @@ local function createRewardPage(parent, top, height, callbacks)
                 row:SetScript("OnLeave", function() GameTooltip:Hide() end)
                 row:SetScript("OnHide", function(self)
                     if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+                end)
+                row:SetScript("OnClick", function(self)
+                    if not tryLinkReward(self) then config.selectItem(self.reward.id) end
                 end)
                 itemRows[index] = row
             end
@@ -281,7 +520,6 @@ local function createRewardPage(parent, top, height, callbacks)
             row.meta:SetText(count == 1 and entry.sources[1].quest.title or (count .. " quest sources"))
             row.icon:SetTexture(C_Item.GetItemIconByID(item.id) or itemFallbackIcon)
             row.background:SetColorTexture(unpack(entry == selection and colors.selected or colors.card))
-            row:SetScript("OnClick", function() config.selectItem(item.id) end)
             row:Show()
         end
         resetScroll(listScroll, list, message and 32 or #entries * 40, offset or 0)
@@ -313,15 +551,91 @@ local function createRewardPage(parent, top, height, callbacks)
         resetScroll(sourceScroll, sources, y, sourceOffset)
     end
 
-    return frame, query, category, listScroll, showItems
+    local function resize(newWidth, newHeight)
+        local listOffset, sourceOffset = listScroll:GetVerticalScroll(), sourceScroll:GetVerticalScroll()
+        local panelWidth = newWidth - sourcesWidth - gap
+        frame:SetSize(newWidth, newHeight)
+        listPanel:SetSize(panelWidth, newHeight - filtersHeight)
+        sourcePanel:SetHeight(newHeight - filtersHeight)
+        if listPanelWidth ~= panelWidth then
+            listPanelWidth = panelWidth
+            listWidth = panelWidth - panelInset
+            list:SetWidth(listWidth)
+            listMessage:SetWidth(listWidth - 4)
+            for _, row in ipairs(itemRows) do row:SetWidth(listWidth) end
+        end
+        updateScroll(listScroll, listOffset)
+        updateScroll(sourceScroll, sourceOffset)
+    end
+
+    return frame, query, category, listScroll, showItems, resize
+end
+
+local function createActiveChainsPage(parent, top, width, height, openQuest)
+    local body, scroll, contentWidth, frame, title = panel(parent, 14, top, width, height, "ACTIVE CHAINS")
+    local rows = {}
+    local notice = label(body, "GameFontHighlightSmall", colors.muted, 6, 4, contentWidth - 12, "")
+
+    local function showChains(_, entries, message)
+        local offset = scroll:GetVerticalScroll()
+        hideAll(rows)
+        notice:SetText(message or "No active quest chains.")
+        notice:SetShown(#entries == 0)
+        title:SetText(message and "ACTIVE CHAINS" or ("ACTIVE CHAINS  /  %d"):format(#entries))
+        for index, entry in ipairs(entries) do
+            local row = rows[index]
+            if not row then
+                row = makeButton(body)
+                row.title:SetPoint("TOPRIGHT", -8, -6)
+                row.meta:SetPoint("TOPRIGHT", -8, -24)
+                row:SetScript("OnClick", function(self)
+                    openQuest(self.step.quest.id, self.step.destination)
+                end)
+                rows[index] = row
+            end
+            row.step = entry.step
+            row:SetPoint("TOPLEFT", 0, -((index - 1) * 44 + 4))
+            row:SetSize(contentWidth, 42)
+            row.title:SetText(entry.title)
+            local quest, log = entry.step.quest, entry.log
+            local status = statuses[log.status]
+            local active = entry.count == 1 and "1 active step" or (entry.count .. " active steps")
+            local level = log.level or quest.level
+            local context = (level and ("  /  Level " .. level) or "") .. (log.zone and ("  /  " .. log.zone) or "")
+            row.meta:SetText(status[1] .. "  /  " .. active .. "  /  " .. quest.title .. " (#" .. quest.id .. ")" .. context)
+            row.meta:SetTextColor(status[2], status[3], status[4])
+            row:Show()
+        end
+        resetScroll(scroll, body, math.max(32, #entries * 44 + 4), offset)
+    end
+
+    local function resize(newWidth, newHeight)
+        local offset = scroll:GetVerticalScroll()
+        frame:SetSize(newWidth, newHeight)
+        local newContentWidth = newWidth - panelInset
+        if newContentWidth ~= contentWidth then
+            contentWidth = newContentWidth
+            body:SetWidth(contentWidth)
+            notice:SetWidth(contentWidth - 12)
+            for _, row in ipairs(rows) do row:SetWidth(contentWidth) end
+        end
+        updateScroll(scroll, offset)
+    end
+
+    return frame, showChains, resize
 end
 
 function Window.New(callbacks)
+    local defaultWidth, defaultHeight = 1000, 622
+    local minWidth, minHeight = 860, 460
+    local bodyTop, bodyBottom, sideMargin, panelGap = 56, 53, 14, 10
+    local detailWidth = 312
     local frame = CreateFrame("Frame", "ForeverQuestChainWindow", UIParent, "PortraitFrameTemplate")
-    frame:SetSize(1000, 622)
+    frame:SetSize(defaultWidth, defaultHeight)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("DIALOG")
     frame:SetMovable(true)
+    frame:SetResizable(true)
     frame:SetClampedToScreen(true)
     frame:EnableMouse(true)
     frame:SetTitle("QuestChain")
@@ -338,6 +652,18 @@ function Window.New(callbacks)
     header:SetScript("OnDragStart", function() frame:StartMoving() end)
     header:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
 
+    local grip = CreateFrame("Button", nil, frame)
+    grip:SetSize(20, 20)
+    grip:SetPoint("BOTTOMRIGHT", -5, 5)
+    grip:SetFrameLevel(frame:GetFrameLevel() + 10)
+    grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    grip:RegisterForDrag("LeftButton")
+    grip:SetScript("OnDragStart", function() frame:StartSizing("BOTTOMRIGHT") end)
+    grip:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
+    frame:HookScript("OnHide", function() frame:StopMovingOrSizing() end)
+
     local footer = CreateFrame("Frame", nil, frame)
     footer:SetPoint("BOTTOMLEFT", 1, 1)
     footer:SetPoint("BOTTOMRIGHT", -1, 1)
@@ -350,15 +676,19 @@ function Window.New(callbacks)
     chainTab:SetText("Chain")
     local rewardsTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
     rewardsTab:SetText("Rewards")
-    footer.Tabs = { catalogTab, chainTab, rewardsTab }
+    local activeChainsTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
+    activeChainsTab:SetText("Active Chains")
+    footer.Tabs = { catalogTab, chainTab, rewardsTab, activeChainsTab }
     PanelTemplates_SetNumTabs(footer, #footer.Tabs)
     PanelTemplates_SetTabEnabled(footer, 2, false)
 
-    local bodyTop, bodyHeight = 56, 513
-    local rewardPage, rewardQuery, rewardCategory, rewardScroll, showRewardItems =
-        createRewardPage(frame, bodyTop, bodyHeight, callbacks)
+    local catalogWidth, bodyHeight = defaultWidth - 2 * sideMargin, defaultHeight - bodyTop - bodyBottom
+    local rewardPage, rewardQuery, rewardCategory, rewardScroll, showRewardItems, resizeRewardPage =
+        createRewardPage(frame, bodyTop, catalogWidth, bodyHeight, callbacks)
+    local activeChainsPage, showActiveChains, resizeActiveChains =
+        createActiveChainsPage(frame, bodyTop, catalogWidth, bodyHeight, callbacks.openQuest)
     local chainBody, chainScroll, chainWidth, chainPanel =
-        panel(frame, 14, bodyTop, 650, bodyHeight, "QUEST TIMELINE")
+        panel(frame, sideMargin, bodyTop, catalogWidth - detailWidth - panelGap, bodyHeight, "QUEST TIMELINE")
     chainScroll:SetPoint("TOPLEFT", 10, -106)
     local chainTitle = label(chainPanel, "GameFontNormalHuge", colors.text, 12, 30, chainWidth, "")
     chainTitle:SetWordWrap(false)
@@ -376,13 +706,15 @@ function Window.New(callbacks)
     categorySeparator:SetPoint("LEFT", kindCrumb, "RIGHT", 8, 0)
     local categoryCrumb = makeBreadcrumb(chainPanel, true)
     categoryCrumb:SetPoint("LEFT", categorySeparator, "RIGHT", 8, 0)
-    local earlierMenu = makeBrowseMenu(chainPanel, chainWidth - 133, 75, 155)
+    local earlierWidth = 155
+    local earlierMenu = makeBrowseMenu(chainPanel, 0, 75, earlierWidth)
+    earlierMenu:ClearAllPoints()
+    earlierMenu:SetPoint("TOPRIGHT", -14, -75)
     earlierMenu:SetDefaultText("Earlier quests")
-    local detailBody, detailScroll, detailWidth, detailPanel =
-        panel(frame, 674, bodyTop, 312, bodyHeight, "Quest Details", true)
+    local detailPanel, showDetails = createQuestDetails(frame, bodyTop, detailWidth, bodyHeight)
     local catalog = CreateFrame("Frame", nil, frame)
-    local catalogWidth, resultsTop = 972, 85
-    catalog:SetPoint("TOPLEFT", 14, -bodyTop)
+    local resultsTop = 85
+    catalog:SetPoint("TOPLEFT", sideMargin, -bodyTop)
     catalog:SetSize(catalogWidth, bodyHeight)
     label(catalog, "GameFontNormalLarge", colors.accent, 12, 9, 260, "Quest catalog")
 
@@ -446,12 +778,21 @@ function Window.New(callbacks)
     local resultBody, resultScroll, resultWidth, resultPanel, resultTitle =
         panel(catalog, 0, resultsTop, catalogWidth, bodyHeight - resultsTop, "SEARCH RESULTS")
     resultScroll:SetPoint("TOPLEFT", 10, -58)
-    local idX, levelX, zoneX, statusX = 465, 550, 618, 796
-    label(resultPanel, "GameFontNormalSmall", colors.muted, 18, 37, idX - 20, "Quest")
-    label(resultPanel, "GameFontNormalSmall", colors.muted, idX + 10, 37, 100, "Quest ID")
-    label(resultPanel, "GameFontNormalSmall", colors.muted, levelX + 10, 37, 90, "Level")
-    local zoneTitle = label(resultPanel, "GameFontNormalSmall", colors.muted, zoneX + 10, 37, statusX - zoneX - 8, "Zone")
-    local statusTitle = label(resultPanel, "GameFontNormalSmall", colors.accent, statusX + 10, 37, resultWidth - statusX, "Quest log")
+    local idX, levelX, zoneX, statusX
+    local questHeading = label(resultPanel, "GameFontNormalSmall", colors.muted, 18, 37, 1, "Quest")
+    local idHeading = label(resultPanel, "GameFontNormalSmall", colors.muted, 0, 37, 77, "Quest ID")
+    local levelHeading = label(resultPanel, "GameFontNormalSmall", colors.muted, 0, 37, 60, "Level")
+    local zoneTitle = label(resultPanel, "GameFontNormalSmall", colors.muted, 0, 37, 170, "Zone")
+    local statusTitle = label(resultPanel, "GameFontNormalSmall", colors.accent, 0, 37, 140, "Quest log")
+    local function layoutResultHeadings()
+        idX, levelX, zoneX, statusX = resultWidth - 471, resultWidth - 386, resultWidth - 318, resultWidth - 140
+        questHeading:SetWidth(idX - 20)
+        idHeading:SetPoint("TOPLEFT", idX + 10, -37)
+        levelHeading:SetPoint("TOPLEFT", levelX + 10, -37)
+        zoneTitle:SetPoint("TOPLEFT", zoneX + 10, -37)
+        statusTitle:SetPoint("TOPLEFT", statusX + 10, -37)
+    end
+    layoutResultHeadings()
     local nextPage = makeControl(resultPanel, "Next page", 88)
     nextPage:SetPoint("TOPRIGHT", -25, -5)
     local previousPage = makeControl(resultPanel, "Previous page", 101)
@@ -474,7 +815,10 @@ function Window.New(callbacks)
         end
     end
     setPageControls()
-    local panHint = label(chainPanel, "GameFontHighlightSmall", colors.muted, chainWidth - 126, 12, 150, "Shift+wheel to pan")
+    local panHint = font(chainPanel, "GameFontHighlightSmall", colors.muted)
+    panHint:SetPoint("TOPRIGHT", -12, -12)
+    panHint:SetWidth(150)
+    panHint:SetText("Shift+wheel to pan")
     panHint:SetJustifyH("RIGHT")
     panHint:Hide()
     local scrollTimeline = chainScroll:GetScript("OnMouseWheel")
@@ -489,52 +833,56 @@ function Window.New(callbacks)
     end)
     local chainLines = CreateFrame("Frame", nil, chainBody)
     chainLines:SetAllPoints()
-    local resultRows, chainRows, connectors, detailLines, rewardRows, locationButtons = {}, {}, {}, {}, {}, {}
-    local detailId
+    local resultRows, chainRows, connectors = {}, {}, {}
     local resultMessage = label(resultBody, "GameFontHighlightSmall", colors.muted, 2, 4, resultWidth - 4,
         "Search by name or quest ID.")
     local chainMessage = label(chainBody, "GameFontHighlightSmall", colors.muted, 2, 4, chainWidth - 4, "")
-    local rewardSummary = CreateFrame("Frame", nil, detailBody)
-    rewardSummary:SetSize(detailWidth - 4, 50)
-    rewardSummary:Hide()
-    local metricWidth = (detailWidth - 4) / 2
-    label(rewardSummary, "QuestFont", colors.inkHeading, 10, 7, metricWidth - 12, "XP")
-    label(rewardSummary, "QuestFont", colors.inkHeading, metricWidth + 10, 7, metricWidth - 12, "Coin")
-    local rewardXP = label(rewardSummary, "QuestFont", colors.ink, 10, 24, metricWidth - 12, "")
-    local rewardCoin = label(rewardSummary, "QuestFont", colors.ink, metricWidth + 10, 24, metricWidth - 12, "")
     resetScroll(resultScroll, resultBody, 32, 0)
     resetScroll(chainScroll, chainBody, 32, 0)
-    resetScroll(detailScroll, detailBody, 32, 0)
 
-    local window = {}
+    local window = { ShowDetails = showDetails, ShowActiveChains = showActiveChains }
     local browsing = false
+    local currentPage, backPage = "browse", "browse"
+    local tabIndex = { browse = 1, chain = 2, rewards = 3, activeChains = 4 }
 
     local function showPage(page)
+        currentPage = page
         local open, chain = page == "browse", page == "chain"
         catalog:SetShown(open)
         chainPanel:SetShown(chain)
         detailPanel:SetShown(chain)
         rewardPage:SetShown(page == "rewards")
+        activeChainsPage:SetShown(page == "activeChains")
         rewardQuery:ClearFocus()
-        PanelTemplates_SetTab(footer, open and 1 or (chain and 2 or 3))
+        PanelTemplates_SetTab(footer, tabIndex[page])
         if open and not browsing and frame:IsShown() then
             search:SetFocus()
         else
             search:ClearFocus()
         end
+        if window:IsActiveChainsOpen() then callbacks.openActiveChains() end
+    end
+
+    function window:IsActiveChainsOpen()
+        return currentPage == "activeChains" and frame:IsShown()
     end
 
     function window:SetCatalogOpen(open)
+        if not open and currentPage ~= "chain" then
+            backPage = currentPage == "activeChains" and "activeChains" or "browse"
+        end
         showPage(open and "browse" or "chain")
     end
 
     browseCrumb:SetScript("OnClick", function() window:SetCatalogOpen(true) end)
+    detailPanel.BackButton:SetScript("OnClick", function() showPage(backPage) end)
     catalogTab:SetScript("OnClick", function() window:SetCatalogOpen(true) end)
     chainTab:SetScript("OnClick", function() window:SetCatalogOpen(false) end)
     rewardsTab:SetScript("OnClick", function()
         showPage("rewards")
         callbacks.rewardPage.open()
     end)
+    activeChainsTab:SetScript("OnClick", function() showPage("activeChains") end)
     window:SetCatalogOpen(true)
 
     function window:SetBrowseMode(enabled)
@@ -589,8 +937,18 @@ function Window.New(callbacks)
 
     function window:Show()
         if not frame:IsShown() then
-            frame:SetScale(math.min(1, UIParent:GetWidth() / 1020, UIParent:GetHeight() / 642))
+            local screenWidth, screenHeight = UIParent:GetWidth(), UIParent:GetHeight()
+            local scale = math.min(1, screenWidth / (defaultWidth + 20), screenHeight / (defaultHeight + 20))
+            local maxWidth = math.floor(screenWidth / scale + 0.5) - 20
+            local maxHeight = math.floor(screenHeight / scale + 0.5) - 20
+            frame:SetScale(scale)
+            frame:SetResizeBounds(minWidth, minHeight, maxWidth, maxHeight)
+            local width, height = frame:GetWidth(), frame:GetHeight()
+            if width > maxWidth or height > maxHeight then
+                frame:SetSize(math.min(width, maxWidth), math.min(height, maxHeight))
+            end
             frame:Show()
+            if self:IsActiveChainsOpen() then callbacks.openActiveChains() end
             if catalog:IsShown() and not browsing then
                 search:SetFocus()
             end
@@ -615,6 +973,20 @@ function Window.New(callbacks)
         return message and resultMessage:GetStringHeight() + 12 or 0
     end
 
+    local function layoutResultRow(row, y)
+        row:SetPoint("TOPLEFT", 0, -y)
+        row.title:SetWidth(idX - 16)
+        row.questId:SetPoint("TOPLEFT", idX, -8)
+        row.level:SetPoint("TOPLEFT", levelX, -8)
+        row.meta:SetPoint("TOPLEFT", zoneX, -8)
+        row.logStatus:SetPoint("TOPLEFT", statusX, -7)
+        row.partyStatus:SetPoint("TOPLEFT", statusX, -24)
+        local height = math.max(29, row.title:GetStringHeight() + 14)
+        if row.partyNames then height = math.max(height, 24 + partyLineHeight) end
+        row:SetSize(resultWidth, height)
+        return y + height + 2
+    end
+
     local function showResultRow(index, y, entry)
         local row = resultRows[index]
         if not row then
@@ -622,7 +994,6 @@ function Window.New(callbacks)
             row.title:SetWordWrap(true)
             row.title:SetMaxLines(2)
             row.meta:ClearAllPoints()
-            row.meta:SetPoint("TOPLEFT", zoneX, -8)
             row.meta:SetWidth(statusX - zoneX - 8)
             row.questId = label(row, "GameFontHighlightSmall", colors.muted, idX, 8, levelX - idX - 8, "")
             row.level = label(row, "GameFontHighlightSmall", colors.muted, levelX, 8, zoneX - levelX - 8, "")
@@ -630,9 +1001,6 @@ function Window.New(callbacks)
             addPartyStatus(row, statusX, 24, resultWidth - statusX - 8)
             resultRows[index] = row
         end
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", 0, -y)
-        row.title:SetWidth(idX - 16)
         row.title:SetText(entry.title)
         row.questId:SetText(entry.id and ("#" .. entry.id) or "")
         row.level:SetText(entry.level and tostring(entry.level) or "")
@@ -646,11 +1014,9 @@ function Window.New(callbacks)
         end
         row:SetScript("OnClick", entry.action)
         setPartyStatus(row, entry.party)
-        local height = math.max(29, row.title:GetStringHeight() + 14)
-        if entry.party then height = math.max(height, 24 + partyLineHeight) end
-        row:SetSize(resultWidth, height)
+        local nextY = layoutResultRow(row, y)
         row:Show()
-        return y + height + 2
+        return nextY
     end
 
     function window:ShowResults(results, message, offset)
@@ -695,12 +1061,16 @@ function Window.New(callbacks)
                 callbacks.openBrowseCategory(kind, category and category.key)
             end)
         end
+        local earlier = ns.Timeline.EarlierSteps(layout, selectedId)
         if category then
-            setBreadcrumbText(categoryCrumb, category.name)
+            local trailWidth = browseCrumb:GetWidth() + kindCrumb:GetWidth()
+                + kindSeparator:GetUnboundedStringWidth() + categorySeparator:GetUnboundedStringWidth()
+            local menuWidth = #earlier > 0 and earlierWidth + 10 or 0
+            local remaining = chainWidth + panelInset - 58 - trailWidth - menuWidth
+            setBreadcrumbText(categoryCrumb, category.name, remaining)
             categoryCrumb:SetScript("OnClick", function() callbacks.openBrowseCategory(kind, category.key) end)
         end
 
-        local earlier = ns.Timeline.EarlierSteps(layout, selectedId)
         earlierMenu:SetShown(#earlier > 0)
         if #earlier > 0 then
             local titles = {}
@@ -719,7 +1089,9 @@ function Window.New(callbacks)
         end
     end
 
+    local lastView, lastSelected, lastStatuses, lastContext
     function window:ShowChain(view, selectedId, statusesById, scrollToId, context)
+        lastView, lastSelected, lastStatuses, lastContext = view, selectedId, statusesById, context
         if chainTab.isDisabled then PanelTemplates_SetTabEnabled(footer, 2, true) end
         local hasParent, optionalSource, structural = {}, {}, {}
         for _, edge in ipairs(view.edges) do
@@ -846,139 +1218,50 @@ function Window.New(callbacks)
         chainScroll:SetHorizontalScroll(math.max(0, math.min(horizontalOffset, chainScroll:GetHorizontalScrollRange())))
     end
 
-    function window:ShowDetails(quest, rewards, requirement)
-        local offset = detailId == quest.id and detailScroll:GetVerticalScroll() or 0
-        detailId = quest.id
-        hideAll(detailLines)
-        hideAll(rewardRows)
-        hideAll(locationButtons)
-        local y, textCount, itemCount, locationCount = 0, 0, 0, 0
-        local function text(value, heading, title)
-            textCount = textCount + 1
-            local normal = detailLines[textCount]
-            if not normal then
-                normal = font(detailBody, "QuestFont", colors.ink)
-                detailLines[textCount] = normal
-            end
-            normal:SetFontObject(title and QuestTitleFont or QuestFont)
-            normal:SetTextColor(unpack(heading and colors.inkHeading or colors.ink))
-            normal:ClearAllPoints()
-            normal:SetPoint("TOPLEFT", 2, -y)
-            normal:SetWidth(detailWidth - 4)
-            normal:SetText(value)
-            normal:Show()
-            y = y + normal:GetStringHeight() + (heading and 6 or 8)
-        end
-        local function listLocations(heading, locations)
-            text(heading, true)
-            if #locations == 0 then
-                text("Unavailable")
-            end
-            for _, location in ipairs(locations) do
-                local value = location.name
-                if location.zone then
-                    value = value .. "  /  " .. location.zone
-                end
-                if location.x then
-                    value = value .. ("  %.1f, %.1f"):format(location.x, location.y)
-                end
-                text(value)
-                if location.mapId then
-                    locationCount = locationCount + 1
-                    local button = locationButtons[locationCount] or makeControl(detailBody, "Show on map", 108)
-                    locationButtons[locationCount] = button
-                    button:SetPoint("TOPLEFT", 2, -y)
-                    button:SetScript("OnClick", function()
-                        if ns.Map.Show(location) then
-                            frame:Hide()
-                        else
-                            print("QuestChain: The world map could not open to this location.")
-                        end
-                    end)
-                    button:Show()
-                    y = y + 32
-                end
-            end
-        end
-        local function rewardField(field, formatValue)
-            if field.state == "known" then
-                return formatValue(field.value)
-            end
-            return field.state == "loading" and "Loading" or "Unavailable"
-        end
-        local function money(copper)
-            return ("%dg %02ds %02dc"):format(math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100)
-        end
-        local function items(heading, field)
-            text(heading, true)
-            if field.state ~= "known" then
-                text(field.state == "loading" and "Loading" or "Unavailable")
-                return
-            end
-            if #field.value == 0 then
-                text("None")
-            end
-            for _, item in ipairs(field.value) do
-                itemCount = itemCount + 1
-                local row = rewardRows[itemCount]
-                if not row then
-                    row = CreateFrame("Button", nil, detailBody, "LargeItemButtonTemplate")
-                    row:SetSize(detailWidth - 4, 41)
-                    row.NameFrame:SetAtlas("QuestItemBorder")
-                    row.NameFrame:ClearAllPoints()
-                    row.NameFrame:SetPoint("TOPLEFT", row.Icon, "TOPRIGHT", 6, 0)
-                    row.NameFrame:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 2)
-                    row.Name:ClearAllPoints()
-                    row.Name:SetPoint("LEFT", row.NameFrame, "LEFT", 8, 0)
-                    row.Name:SetPoint("RIGHT", row.NameFrame, "RIGHT", -8, 0)
-                    row:SetScript("OnEnter", showTooltip)
-                    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
-                    row:SetScript("OnHide", function(self)
-                        if GameTooltip:IsOwned(self) then
-                            GameTooltip:Hide()
-                        end
-                    end)
-                    rewardRows[itemCount] = row
-                end
-                row.reward = item
-                row:ClearAllPoints()
-                row:SetPoint("TOPLEFT", 2, -y)
-                row.Icon:SetTexture(item.icon or C_Item.GetItemIconByID(item.id) or itemFallbackIcon)
-                row.Name:SetText(itemName(item))
-                row.Count:SetText(item.quantity > 1 and tostring(item.quantity) or "")
-                row:Show()
-                y = y + 46
-            end
-        end
+    frame:HookScript("OnSizeChanged", function(_, width, height)
+        local newWidth = math.floor(width + 0.5) - 2 * sideMargin
+        local newHeight = math.floor(height + 0.5) - bodyTop - bodyBottom
+        local widthChanged = catalogWidth ~= newWidth
+        if not widthChanged and bodyHeight == newHeight then return end
 
-        text(quest.title, true, true)
-        local context = "#" .. quest.id .. (quest.level and ("  /  Level " .. quest.level) or "")
-        text(context .. (quest.zone and ("  /  " .. quest.zone) or ""))
-        y = y + 6
-        text("Rewards", true)
-        rewardSummary:SetPoint("TOPLEFT", 2, -y)
-        rewardXP:SetText(rewardField(rewards.xp, tostring))
-        rewardCoin:SetText(rewardField(rewards.copper, money))
-        rewardSummary:Show()
-        y = y + rewardSummary:GetHeight() + 12
-        local guaranteed, choices = rewards.guaranteed, rewards.choices
-        if guaranteed.state == "known" and #guaranteed.value == 0 and choices.state == "known" and #choices.value == 0 then
-            text("No item rewards")
+        local resultOffset = resultScroll:GetVerticalScroll()
+        local chainOffset = chainScroll:GetVerticalScroll()
+        catalogWidth, bodyHeight = newWidth, newHeight
+        catalog:SetSize(catalogWidth, bodyHeight)
+        resultPanel:SetSize(catalogWidth, bodyHeight - resultsTop)
+        local chainPanelWidth = catalogWidth - detailWidth - panelGap
+        chainPanel:SetSize(chainPanelWidth, bodyHeight)
+        detailPanel:SetHeight(bodyHeight)
+        resizeRewardPage(catalogWidth, bodyHeight)
+        resizeActiveChains(catalogWidth, bodyHeight)
+
+        if widthChanged then
+            resultWidth, chainWidth = catalogWidth - panelInset, chainPanelWidth - panelInset
+            resultBody:SetWidth(resultWidth)
+            resultMessage:SetWidth(resultWidth - 4)
+            layoutResultHeadings()
+            local y = resultMessage:IsShown() and resultMessage:GetStringHeight() + 12 or 0
+            for _, row in ipairs(resultRows) do
+                if not row:IsShown() then break end
+                y = layoutResultRow(row, y)
+            end
+            resetScroll(resultScroll, resultBody, y, resultOffset)
+
+            chainTitle:SetWidth(chainWidth)
+            chainContext:SetWidth(chainWidth)
+            chainMessage:SetWidth(chainWidth - 4)
+            if lastView then
+                updateScroll(chainScroll, chainOffset)
+                window:ShowChain(lastView, lastSelected, lastStatuses, nil, lastContext)
+            else
+                chainBody:SetWidth(chainWidth)
+                updateScroll(chainScroll, chainOffset)
+            end
         else
-            items("Guaranteed items", guaranteed)
-            items("Choose one", choices)
+            updateScroll(resultScroll, resultOffset)
+            updateScroll(chainScroll, chainOffset)
         end
-        y = y + 8
-        text("Objectives", true)
-        text(#quest.objectives > 0 and table.concat(quest.objectives, "\n") or "Unavailable")
-        if requirement then
-            text("Prerequisites", true)
-            text(requirement)
-        end
-        listLocations("Starts at", quest.starters)
-        listLocations("Turns in at", quest.finishers)
-        resetScroll(detailScroll, detailBody, y, offset)
-    end
+    end)
 
     return window
 end

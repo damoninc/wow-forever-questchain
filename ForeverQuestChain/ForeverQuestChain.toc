@@ -5,6 +5,7 @@
 ## X-Curse-Project-ID: 1792071
 ## Dependencies: QuestieDB
 ## OptionalDeps: TomTom
+## SavedVariables: ForeverQuestChainSettings
 
 QuestData.lua
 Chain.lua
@@ -16,3 +17,4 @@ Map.lua
 Map.xml
 Window.lua
 Core.lua
+Minimap.lua
