@@ -108,10 +108,13 @@ jobs:
           python3 tools/prepare-publisher.py "$RUNNER_TEMP/questchain-publisher.sh"
 
       - name: Reserve publication
+        id: reservation
         run: |
-          gh release create "$RELEASE_TAG" --verify-tag --draft \
-            --title "QuestChain $RELEASE_TAG" \
-            --notes "Publication in progress. If interrupted, check CurseForge before retrying; see the repository's release recovery instructions."
+          reservation_id=$(gh api --method POST "repos/$GH_REPO/releases" \
+            -f tag_name="$RELEASE_TAG" -f name="QuestChain $RELEASE_TAG" \
+            -f body="Publication in progress. If interrupted, check CurseForge before retrying; see the repository's release recovery instructions." \
+            -F draft=true --jq '.id')
+          echo "id=$reservation_id" >> "$GITHUB_OUTPUT"
 
       - name: Publish tested tag to CurseForge and GitHub
         run: bash "$RUNNER_TEMP/questchain-publisher.sh" -g forever -n 'QuestChain-{project-version}'
@@ -150,3 +153,14 @@ jobs:
             jq -r '.url' <<< "$release"
             printf '\nCurseForge project: 1792071. File approval and search indexing may follow publication.\n'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove unused publication reservation
+        env:
+          RESERVATION_ID: ${{ steps.reservation.outputs.id }}
+        run: |
+          # GitHub can keep a draft separate from the packager's published release.
+          # Delete only our recorded draft; never delete the published release/tag.
+          reservation=$(gh api "repos/$GH_REPO/releases/$RESERVATION_ID")
+          if jq -e --arg tag "$RELEASE_TAG" '.draft == true and .tag_name == $tag' <<< "$reservation" > /dev/null; then
+            gh api --method DELETE "repos/$GH_REPO/releases/$RESERVATION_ID"
+          fi
