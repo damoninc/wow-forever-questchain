@@ -1,0 +1,22 @@
+package-as: ForeverQuestChain
+
+move-folders:
+  ForeverQuestChain/ForeverQuestChain: ForeverQuestChain
+
+required-dependencies:
+  - questiedb
+
+optional-dependencies:
+  - tomtom
+
+ignore:
+  - .github
+  - .gitignore
+  - .luarc.json
+  - .vscode
+  - AGENTS.md
+  - README.md
+  - docs
+  - tests
+  - tools
+  - types

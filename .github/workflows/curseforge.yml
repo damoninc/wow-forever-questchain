@@ -1,6 +1,7 @@
 name: Package QuestChain
 
 on:
+  pull_request:
   push:
     branches: [main]
     tags: ['v*']
@@ -11,15 +12,15 @@ permissions:
 
 concurrency:
   group: questchain-package-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   package:
-    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Run Lua 5.1 tests
@@ -31,68 +32,119 @@ jobs:
           done
           luac5.1 -p ForeverQuestChain/*.lua
 
-      - name: Build installable ZIP
-        id: build
+      - name: Test release packaging without publishing
+        env:
+          # Same immutable version as the packaging actions below (v2.7.0).
+          PACKAGER_SCRIPT: ${{ runner.temp }}/questchain-packager.sh
         run: |
-          toc=ForeverQuestChain/ForeverQuestChain.toc
-          version=$(awk '/^## Version:/ {print $3; exit}' "$toc")
-          interface=$(awk '/^## Interface:/ {print $3; exit}' "$toc")
-          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          [[ "$interface" =~ ^1[6-9][0-9]{3}$ ]]
-          game_version="$((interface / 10000)).$((interface / 100 % 100)).$((interface % 100))"
-          release_type=alpha
-          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
-            if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
-              echo "::error::The Git tag must match the addon TOC version (v$version)."
-              exit 1
-            fi
-            release_type=release
-          else
-            version="$version-alpha.${GITHUB_SHA:0:8}"
+          curl --fail --silent --show-error --location \
+            https://raw.githubusercontent.com/BigWigsMods/packager/01e8631a69c69d7654c788d152630d5fed9e3812/release.sh \
+            --output "$PACKAGER_SCRIPT"
+          python3 tests/package.py
+
+      - name: Prepare packaged version
+        id: prepare
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          bash tools/prepare-release.sh "$REF_TYPE" "$REF_NAME"
+          # BigWigs skips branch pushes at a tagged commit; that tag owns the package.
+          if [[ "$REF_TYPE" != tag && -n "$(git tag --points-at HEAD)" ]]; then
+            echo 'tagged_branch=true' >> "$GITHUB_OUTPUT"
           fi
-          zip="$RUNNER_TEMP/QuestChain-$version.zip"
-          git archive --format=zip --output="$zip" HEAD ForeverQuestChain
-          printf 'zip=%s\nversion=%s\nrelease_type=%s\ngame_version=%s\n' \
-            "$zip" "$version" "$release_type" "$game_version" >> "$GITHUB_OUTPUT"
+
+      - name: Build installable ZIP
+        if: steps.prepare.outputs.tagged_branch != 'true'
+        uses: BigWigsMods/packager@01e8631a69c69d7654c788d152630d5fed9e3812 # v2.7.0
+        with:
+          args: -d -g forever -n QuestChain-{project-version}
+          pandoc: 'false'
 
       - uses: actions/upload-artifact@v6
+        if: steps.prepare.outputs.tagged_branch != 'true'
         with:
-          name: QuestChain-${{ steps.build.outputs.version }}
-          path: ${{ steps.build.outputs.zip }}
+          name: QuestChain-${{ github.sha }}
+          path: .release/*.zip
           if-no-files-found: error
 
-      - name: Upload to CurseForge
+  publish:
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check publication prerequisites
         env:
-          CF_PROJECT_ID: ${{ vars.CF_PROJECT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          ZIP: ${{ steps.build.outputs.zip }}
-          VERSION: ${{ steps.build.outputs.version }}
-          RELEASE_TYPE: ${{ steps.build.outputs.release_type }}
-          GAME_VERSION: ${{ steps.build.outputs.game_version }}
         run: |
-          if [[ -z "$CF_PROJECT_ID" || -z "$CF_API_TOKEN" ]]; then
-            echo "::notice::CurseForge upload skipped. Set CF_PROJECT_ID and CF_API_TOKEN to enable uploads."
-            exit 0
+          if [[ -z "$CF_API_TOKEN" ]]; then
+            echo "::error::Set the CF_API_TOKEN repository secret before publishing a release."
+            exit 1
           fi
-          [[ "$CF_PROJECT_ID" =~ ^[1-9][0-9]*$ ]]
-          base_url=https://wow.curseforge.com/api
-          # CurseForge assigns game version type 88568 to WoW: Forever.
-          versions=$(curl --fail --silent --show-error --max-time 60 \
-            --header "X-Api-Token: $CF_API_TOKEN" "$base_url/game/versions")
-          version_id=$(jq -er --arg version "$GAME_VERSION" '
-            first(.[] | select(.gameVersionTypeID == 88568 and .name == $version) | .id)
-              // error("No CurseForge Forever version matches " + $version)
-          ' <<< "$versions")
-          changelog="Source commit: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
-          metadata=$(jq -cn --arg display "QuestChain $VERSION" --arg type "$RELEASE_TYPE" \
-            --arg changelog "$changelog" --argjson id "$version_id" \
-            '{displayName:$display, releaseType:$type, changelog:$changelog, gameVersions:[$id]}')
-          response=$(curl --fail-with-body --silent --show-error --max-time 120 \
-            --header "X-Api-Token: $CF_API_TOKEN" \
-            --form-string "metadata=$metadata" --form "file=@$ZIP;type=application/zip" \
-            "$base_url/projects/$CF_PROJECT_ID/upload-file") || {
-              printf '%s\n' "$response" >&2
-              exit 1
-            }
-          file_id=$(jq -er '.id | numbers' <<< "$response")
-          echo "Uploaded CurseForge file $file_id."
+          bash tools/prepare-release.sh tag "$RELEASE_TAG"
+          releases=$(gh api --paginate "repos/$GH_REPO/releases" --jq '.[].tag_name')
+          if grep -Fxq -- "$RELEASE_TAG" <<< "$releases"; then
+            echo "::error::A release or upload reservation already exists for $RELEASE_TAG. Inspect GitHub and CurseForge before recovery; see README.md."
+            exit 1
+          fi
+
+      - name: Prepare single-attempt publisher
+        run: |
+          curl --fail --silent --show-error --location \
+            https://raw.githubusercontent.com/BigWigsMods/packager/01e8631a69c69d7654c788d152630d5fed9e3812/release.sh \
+            --output "$RUNNER_TEMP/questchain-publisher.sh"
+          python3 tools/prepare-publisher.py "$RUNNER_TEMP/questchain-publisher.sh"
+
+      - name: Reserve publication
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --draft \
+            --title "QuestChain $RELEASE_TAG" \
+            --notes "Publication in progress. If interrupted, check CurseForge before retrying; see the repository's release recovery instructions."
+
+      - name: Publish tested tag to CurseForge and GitHub
+        run: bash "$RUNNER_TEMP/questchain-publisher.sh" -g forever -n 'QuestChain-{project-version}'
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          GH_API_TOKEN: ${{ github.token }}
+
+      - name: Retain publication files for recovery
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: QuestChain-publication-${{ github.ref_name }}
+          path: |
+            .release/*.zip
+            .release/release.json
+            .release/ForeverQuestChain/CHANGELOG.md
+          if-no-files-found: ignore
+
+      - name: Verify published release
+        run: |
+          release=$(gh release view "$RELEASE_TAG" --json isDraft,isPrerelease,assets,url)
+          jq -e --arg zip "QuestChain-$RELEASE_TAG.zip" '
+            .isDraft == false
+            and ([.assets[].name] | index($zip) != null and index("release.json") != null)
+          ' <<< "$release"
+          gh release download "$RELEASE_TAG" --pattern release.json --dir "$RUNNER_TEMP/questchain-published"
+          interface=$(awk '/^## Interface:/ {print $3; exit}' ForeverQuestChain/ForeverQuestChain.toc)
+          jq -e --arg version "$RELEASE_TAG" --argjson interface "$interface" '
+            .releases | length == 1 and (.[0] |
+              .version == $version and .filename == ("QuestChain-" + $version + ".zip")
+              and .metadata == [{flavor:"forever", interface:$interface}])
+          ' "$RUNNER_TEMP/questchain-published/release.json"
+          {
+            printf 'Published QuestChain %s\n\n' "$RELEASE_TAG"
+            jq -r '.url' <<< "$release"
+            printf '\nCurseForge project: 1792071. File approval and search indexing may follow publication.\n'
+          } >> "$GITHUB_STEP_SUMMARY"

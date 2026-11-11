@@ -5,7 +5,7 @@ QuestChain is an in-game quest-chain reference for **WoW: Forever**. Look up a q
 ## Install
 
 1. Install or enable the Forever version of [QuestieDB](https://github.com/Questie/QuestieDB/releases). A compatible QuestieDB installation from Questie also works.
-2. Clone this repository or download it via **Code → Download ZIP**. Copy the `ForeverQuestChain` folder into your Forever client's `Interface/AddOns` directory.
+2. Download the installable ZIP from [GitHub Releases](https://github.com/damoninc/wow-forever-questchain/releases) and extract it into your Forever client's `Interface/AddOns` directory. The ZIP contains the `ForeverQuestChain` folder. For a source checkout, copy that folder from this repository instead.
 3. Enable **QuestChain** in the AddOns list and run `/questchain` in chat. Use `/reload` if you added it during a session. If the new addon is absent from the AddOns list, restart the client.
 
 Search by title or quest ID. Linear steps run down the center of the timeline. Sibling branches sit side by side and reconnect at their shared next step. Hold **Shift** while scrolling to pan wide branches.
@@ -43,9 +43,28 @@ Run the Lua 5.1 fixtures in `tests/` from the repository root. See [AGENTS.md](A
 
 ## Publishing
 
-The **Package QuestChain** workflow tests and packages pushes to `main` as Alpha builds. For a stable Release, update `## Version` in the TOC and push a matching tag such as `v0.1.1`. Download the installable ZIP from the workflow run's artifacts.
+Versions follow `major.minor.patch`: increment patch for fixes, minor for features, and major for significant breaking changes. The source TOC keeps the numeric version. A tag must match it exactly, for example `## Version: 0.1.0` and `v0.1.0`. Optional betas use a matching version such as `0.2.0-beta.1` / `v0.2.0-beta.1`.
 
-To enable CurseForge uploads, create the project in the Authors Console and set the GitHub Actions repository variable `CF_PROJECT_ID` to its numeric ID. Store a CurseForge upload token as the Actions repository secret `CF_API_TOKEN`. The workflow matches the TOC interface to a CurseForge Forever game version. Once the project can receive uploads, run **Package QuestChain** manually on `main` to test the connection.
+The **Package QuestChain** workflow runs Lua 5.1 fixtures and real packaging checks for pull requests, pushes to `main`, and manual runs. Branch builds remain GitHub Actions artifacts; they are not uploaded to CurseForge. BigWigs stamps the packaged TOC and ZIP with the Git-derived build version. Development versions include the source commit once they are past a release tag.
+
+To publish:
+
+1. Update `## Version` in `ForeverQuestChain/ForeverQuestChain.toc` and commit the changes to `main`.
+2. Verify CI and playtest affected runtime changes in Forever.
+3. Create and push the matching tag, for example:
+
+   ```sh
+   git tag -a v0.1.0 -m "QuestChain 0.1.0"
+   git push origin v0.1.0
+   ```
+
+Tagged pushes publish the same packaged build to CurseForge and a GitHub Release. Stable tags use CurseForge's **Release** channel; `-beta.N` tags use **Beta** and a GitHub prerelease. GitHub releases contain an installable ZIP, changelog, and BigWigs `release.json` with the Forever flavor for addon managers. Keep released tags immutable; publish a new version for changes.
+
+The CurseForge project ID is `1792071`, recorded in the TOC as `X-Curse-Project-ID`. Store the upload token as the GitHub Actions repository secret `CF_API_TOKEN`. The old `CF_PROJECT_ID` repository variable is no longer used. QuestieDB is a required CurseForge dependency; TomTom is optional. GitHub/manual users must install QuestieDB separately.
+
+Publishing reserves a draft GitHub Release before any platform upload and refuses to run if that tag already has a release or reservation. The pinned BigWigs publisher is prepared locally to disable both automatic CurseForge upload retry layers; packaging and metadata generation remain upstream. A failed or timed-out POST stops publication for inspection. An interrupted run can leave that draft, or an uploaded CurseForge file awaiting approval. **Do not blindly rerun or delete the reservation.** Inspect the failed job and CurseForge files first. If CurseForge accepted nothing and no run is active, remove only the incomplete GitHub draft (preserve the tag), then rerun the failed publication job. If CurseForge accepted the file, finish the GitHub release using the retained build artifact and manifest format rather than uploading to CurseForge again.
+
+Project approval and file approval are separate. For app discovery, verify an approved Release/Beta file is tagged for Forever and the project is not Experimental. After the first GitHub release, verify the repository is listed in the [WowUp Hub](https://wowup.io/guide/wowup/hub); GitHub releases alone do not guarantee search indexing.
 
 ## Editor IntelliSense
 
