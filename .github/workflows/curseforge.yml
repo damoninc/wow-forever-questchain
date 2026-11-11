@@ -67,6 +67,7 @@ jobs:
           name: QuestChain-${{ github.sha }}
           path: .release/*.zip
           if-no-files-found: error
+          include-hidden-files: true
 
   publish:
     needs: package
@@ -128,6 +129,7 @@ jobs:
             .release/release.json
             .release/ForeverQuestChain/CHANGELOG.md
           if-no-files-found: ignore
+          include-hidden-files: true
 
       - name: Verify published release
         run: |
