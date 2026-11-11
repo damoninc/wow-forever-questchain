@@ -47,7 +47,9 @@ Run the Lua 5.1 fixtures in `tests/` from the repository root. See [AGENTS.md](A
 
 **Every push or merge to `main` automatically publishes a stable Release to GitHub and CurseForge after the checks pass.** Pull requests run the checks without publishing. Merge changes when they are ready for players.
 
-The single **CI and deploy** workflow runs the Lua fixtures and real packaging tests, assigns the next patch version (for example `v1.0.0` to `v1.0.1`), and tags the merged commit itself. There is no release button, version-bump commit, or manual TOC edit. Releases are queued rather than cancelled when more merges arrive.
+Changes reach protected `main` through pull requests. The required GitHub Actions `Tests` check must pass against an up-to-date base, and review conversations must be resolved. Force pushes and branch deletion are blocked, including for admins. The intended settings are recorded in `.github/branch-protection.json`. `.github/workflows/ci.yml` runs the Lua, version, and packaging checks on PRs and is reused by the main deployment workflow.
+
+The **Deploy GA** workflow reuses CI, assigns the next patch version (for example `v1.0.0` to `v1.0.1`), and tags the merged commit itself. There is no release button, version-bump commit, or manual TOC edit. Releases are queued rather than cancelled when more merges arrive.
 
 The Git tag is the version source. `## Version: @project-version@` in the source TOC is filled by the pinned BigWigs packager. One publishing invocation builds one installable ZIP and uploads that same file to GitHub and CurseForge as Release. GitHub also receives the Forever `release.json` manifest used by addon managers.
 

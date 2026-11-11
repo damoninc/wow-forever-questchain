@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test Lua and automatic versions
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1
+          for test in tests/*.lua; do lua5.1 "$test"; done
+          luac5.1 -p ForeverQuestChain/*.lua
+          python3 tests/release.py
+
+      - name: Test real BigWigs packages without publishing
+        env:
+          PACKAGER_SCRIPT: ${{ runner.temp }}/questchain-packager.sh
+        run: |
+          curl --fail --silent --show-error --location \
+            https://raw.githubusercontent.com/BigWigsMods/packager/01e8631a69c69d7654c788d152630d5fed9e3812/release.sh \
+            --output "$PACKAGER_SCRIPT"
+          python3 tests/package.py
