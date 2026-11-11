@@ -45,31 +45,19 @@ Run the Lua 5.1 fixtures in `tests/` from the repository root. See [AGENTS.md](A
 
 ## Publishing
 
-Versions follow `major.minor.patch`: increment patch for fixes, minor for features, and major for significant breaking changes. The source TOC keeps the numeric version. A tag must match it exactly, for example `## Version: 0.1.0` and `v0.1.0`. Optional betas use a matching version such as `0.2.0-beta.1` / `v0.2.0-beta.1`.
+**Every push or merge to `main` automatically publishes a stable Release to GitHub and CurseForge after the checks pass.** Pull requests run the checks without publishing. Merge changes when they are ready for players.
 
-The **Package QuestChain** workflow runs Lua 5.1 fixtures and real packaging checks for pull requests, pushes to `main`, and manual runs. Branch builds remain GitHub Actions artifacts; they are not uploaded to CurseForge. BigWigs stamps the packaged TOC and ZIP with the Git-derived build version. Development versions include the source commit once they are past a release tag.
+The single **CI and deploy** workflow runs the Lua fixtures and real packaging tests, assigns the next patch version (for example `v1.0.0` to `v1.0.1`), and tags the merged commit itself. There is no release button, version-bump commit, or manual TOC edit. Releases are queued rather than cancelled when more merges arrive.
 
-To publish, open **Actions → Release QuestChain → Run workflow** on `main`:
+The Git tag is the version source. `## Version: @project-version@` in the source TOC is filled by the pinned BigWigs packager. One publishing invocation builds one installable ZIP and uploads that same file to GitHub and CurseForge as Release. GitHub also receives the Forever `release.json` manifest used by addon managers.
 
-1. Choose `patch` for fixes, `minor` for features, or `exact` to enter a specific version without the `v` prefix. Use `exact` for major releases and beta progression or promotion.
-2. Check **Preview** first if you want to inspect the candidate version and installable ZIP. Preview runs do not push commits, create remote tags, or publish files.
-3. For a release, leave Preview unchecked. The action updates only the TOC version, creates a local version commit and tag, runs the Lua and packaging checks, then pushes the commit and tag together. It invokes **Package QuestChain** directly to test and publish that exact tag.
+Each release includes `curseforge-upload.json`: the accepted CurseForge file ID, source commit, archive name, stable release type, and ZIP checksum. CI downloads the GitHub ZIP and verifies it against this checksum. The deployment summary links the GitHub release and identifies the CurseForge file.
 
-Playtest affected runtime changes in Forever before releasing. The action requires the current `main` commit and respects branch protection. If `main` advances during verification, its atomic push fails without creating a partial release; start a new run. A failed publication after the push leaves the version commit and tag in place; follow the recovery instructions below.
+The CurseForge project ID is `1792071`, recorded in the TOC as `X-Curse-Project-ID`. The repository needs the `CF_API_TOKEN` Actions secret. GitHub uses its built-in token; no extra access token is required. QuestieDB is a required CurseForge dependency and TomTom is optional. GitHub/manual users must install QuestieDB separately.
 
-The workflow uses GitHub's built-in token. Its automated tag push does not start another push workflow, so the release action explicitly calls our packaging workflow. No additional personal access token is required. BigWigs remains the pinned packaging tool running inside our GitHub runner; our repository owns the version bump, tests, package configuration, and publication controls.
+A completed deployment rerun verifies its existing release. A failed or ambiguous CurseForge upload stops without automatically repeating the POST; inspect the retained deployment files before retrying so an accepted file is not uploaded twice. Released tags remain immutable. A new merge gets a new version.
 
-Use meaningful Conventional Commit prefixes such as `fix:`, `feat:`, and `chore:` for release notes. The action uses the bump you select; it does not infer versions from commit messages.
-
-Manual releases still work: update and commit the TOC version yourself, then push its matching annotated tag, for example `git tag -a v0.1.1 -m "QuestChain 0.1.1"` followed by `git push origin v0.1.1`.
-
-Tagged pushes publish the same packaged build to CurseForge and a GitHub Release. Stable tags use CurseForge's **Release** channel; `-beta.N` tags use **Beta** and a GitHub prerelease. GitHub releases contain an installable ZIP, changelog, and BigWigs `release.json` with the Forever flavor for addon managers. Keep released tags immutable; publish a new version for changes.
-
-The CurseForge project ID is `1792071`, recorded in the TOC as `X-Curse-Project-ID`. Store the upload token as the GitHub Actions repository secret `CF_API_TOKEN`. The old `CF_PROJECT_ID` repository variable is no longer used. QuestieDB is a required CurseForge dependency; TomTom is optional. GitHub/manual users must install QuestieDB separately.
-
-Publishing reserves a draft GitHub Release before any platform upload and refuses to run if that tag already has a release or reservation. The pinned BigWigs publisher is prepared locally to disable both automatic CurseForge upload retry layers; packaging and metadata generation remain upstream. A failed or timed-out POST stops publication for inspection. An interrupted run can leave that draft, or an uploaded CurseForge file awaiting approval. **Do not blindly rerun or delete the reservation.** Inspect the failed job and CurseForge files first. If CurseForge accepted nothing and no run is active, remove only the incomplete GitHub draft (preserve the tag), then rerun the failed publication job. If CurseForge accepted the file, finish the GitHub release using the retained build artifact and manifest format rather than uploading to CurseForge again.
-
-Project approval and file approval are separate. For app discovery, verify an approved Release/Beta file is tagged for Forever and the project is not Experimental. After the first GitHub release, verify the repository is listed in the [WowUp Hub](https://wowup.io/guide/wowup/hub); GitHub releases alone do not guarantee search indexing.
+CurseForge can moderate and index files after accepting the upload. The project must be non-Experimental and its file tagged for Forever for app discovery. GitHub releases provide the package and metadata for WowUp; Hub indexing is managed externally.
 
 ## Editor IntelliSense
 

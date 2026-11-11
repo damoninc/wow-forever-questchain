@@ -1,7 +1,9 @@
-"""Check version decisions and source TOC updates for the release action."""
+"""Check automatic GA version allocation from immutable Git tags."""
 
 import importlib.util
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 
@@ -19,37 +21,58 @@ def load_tool(name):
 
 
 class VersionTests(unittest.TestCase):
-    def test_patch_minor_and_explicit_versions(self):
-        next_version = load_tool("bump-version").next_version
-        self.assertEqual(next_version("0.1.0", "patch"), "0.1.1")
-        self.assertEqual(next_version("0.1.9", "minor"), "0.2.0")
-        self.assertEqual(next_version("0.1.0", "exact", "1.0.0"), "1.0.0")
+    def test_first_release_is_stable(self):
+        self.assertEqual(load_tool("release-version").release_tag([], []), "v1.0.0")
 
-    def test_beta_progression_and_promotion(self):
-        next_version = load_tool("bump-version").next_version
-        self.assertEqual(next_version("0.1.0", "exact", "0.2.0-beta.1"), "0.2.0-beta.1")
-        self.assertEqual(next_version("0.2.0-beta.1", "exact", "0.2.0-beta.2"), "0.2.0-beta.2")
-        self.assertEqual(next_version("0.2.0-beta.2", "exact", "0.2.0"), "0.2.0")
-        with self.assertRaises(ValueError):
-            next_version("0.2.0-beta.1", "patch")
+    def test_each_new_commit_gets_next_stable_patch(self):
+        allocate = load_tool("release-version").release_tag
+        self.assertEqual(allocate(["v0.1.0", "v1.0.0"], []), "v1.0.1")
+        self.assertEqual(allocate(["v1.2.9", "v1.2.10", "v2.0.0-beta.1", "notes"], []), "v1.2.11")
 
-    def test_invalid_or_nonincreasing_versions_fail(self):
-        next_version = load_tool("bump-version").next_version
-        for version in ("", "v0.2.0", "01.0.0", "0.1", "0.1.0", "0.0.9", "0.1.0-beta.1", "0.2.0-rc.1", "0.2.0-beta.01"):
-            with self.subTest(version=version), self.assertRaises(ValueError):
-                next_version("0.1.0", "exact", version)
-        with self.assertRaises(ValueError):
-            next_version("0.1.0", "patch", "0.2.0")
+    def test_retry_reuses_exact_source_version(self):
+        allocate = load_tool("release-version").release_tag
+        self.assertEqual(allocate(["v1.0.1", "v1.0.2"], ["v1.0.1"]), "v1.0.1")
 
-    def test_toc_update_preserves_every_other_byte(self):
-        bump = load_tool("bump-version").update_toc
-        for newline in (b"\n", b"\r\n"):
-            before = newline.join([b"## Title: QuestChain", b"## Version: 0.1.0", b"## SavedVariables: Settings", b"", b"Core.lua", b""])
-            after, version = bump(before, "patch")
-            self.assertEqual(version, "0.1.1")
-            self.assertEqual(after, before.replace(b"## Version: 0.1.0", b"## Version: 0.1.1"))
+    def test_ambiguous_versions_on_one_commit_fail(self):
         with self.assertRaises(ValueError):
-            bump(b"## Version: 0.1.0\n## Version: 0.1.0\n", "patch")
+            load_tool("release-version").release_tag(["v1.0.1", "v1.0.2"], ["v1.0.1", "v1.0.2"])
+
+
+class SourceOrderTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory(prefix="questchain-release-order-")
+        self.addCleanup(temp.cleanup)
+        self.repo = Path(temp.name)
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.name", "Release test")
+        self.git("config", "user.email", "test@example.invalid")
+        self.commit("Base")
+        self.git("tag", "v1.0.0")
+        self.commit("Older merge")
+        self.older = self.git("rev-parse", "HEAD")
+        self.commit("Newer merge")
+        self.git("tag", "v1.0.1")
+
+    def git(self, *args):
+        return subprocess.check_output(["git", "-C", str(self.repo), *args], text=True, stderr=subprocess.DEVNULL).strip()
+
+    def commit(self, value):
+        (self.repo / "source.txt").write_text(value)
+        self.git("add", ".")
+        self.git("commit", "-qm", value)
+
+    def test_older_unreleased_source_cannot_replace_newer_release(self):
+        tool = load_tool("release-version")
+        self.assertTrue(hasattr(tool, "allocate_release"), "Source ancestry validation is missing")
+        self.git("checkout", "-q", "--detach", self.older)
+        with self.assertRaisesRegex(ValueError, "older"):
+            tool.allocate_release(self.repo)
+
+    def test_descendant_merge_gets_new_version(self):
+        tool = load_tool("release-version")
+        self.assertTrue(hasattr(tool, "allocate_release"), "Source ancestry validation is missing")
+        self.commit("Next merge")
+        self.assertEqual(tool.allocate_release(self.repo), "v1.0.2")
 
 
 if __name__ == "__main__":

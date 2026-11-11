@@ -1,51 +1,39 @@
-name: Package QuestChain
+name: CI and deploy
 
 on:
   pull_request:
   push:
     branches: [main]
-    tags: ['v*']
-  workflow_dispatch:
-  workflow_call:
-    inputs:
-      release_tag:
-        description: Existing tag created by Release QuestChain
-        required: true
-        type: string
-    secrets:
-      CF_API_TOKEN:
-        required: true
 
 permissions:
   contents: read
 
+# Keep every main deployment queued, rather than replacing pending releases.
 concurrency:
-  group: questchain-package-${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
-  cancel-in-progress: ${{ inputs.release_tag == '' && !startsWith(github.ref, 'refs/tags/') }}
+  group: questchain-${{ github.event_name == 'push' && 'production' || github.ref }}
+  cancel-in-progress: false
+  queue: max
 
 jobs:
-  package:
+  checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Run Lua 5.1 tests
+      - name: Test Lua and automatic versions
         run: |
           sudo apt-get update
           sudo apt-get install -y lua5.1
-          for test in tests/*.lua; do
-            lua5.1 "$test"
-          done
+          for test in tests/*.lua; do lua5.1 "$test"; done
           luac5.1 -p ForeverQuestChain/*.lua
           python3 tests/release.py
 
-      - name: Test release packaging without publishing
+      - name: Test real BigWigs packages without publishing
         env:
-          # Same immutable version as the packaging actions below (v2.7.0).
           PACKAGER_SCRIPT: ${{ runner.temp }}/questchain-packager.sh
         run: |
           curl --fail --silent --show-error --location \
@@ -53,126 +41,105 @@ jobs:
             --output "$PACKAGER_SCRIPT"
           python3 tests/package.py
 
-      - name: Prepare packaged version
-        id: prepare
-        env:
-          REF_TYPE: ${{ inputs.release_tag && 'tag' || github.ref_type }}
-          REF_NAME: ${{ inputs.release_tag || github.ref_name }}
-        run: |
-          bash tools/prepare-release.sh "$REF_TYPE" "$REF_NAME"
-          # BigWigs skips branch pushes at a tagged commit; that tag owns the package.
-          if [[ "$REF_TYPE" != tag && -n "$(git tag --points-at HEAD)" ]]; then
-            echo 'tagged_branch=true' >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build installable ZIP
-        if: steps.prepare.outputs.tagged_branch != 'true'
-        uses: BigWigsMods/packager@01e8631a69c69d7654c788d152630d5fed9e3812 # v2.7.0
-        with:
-          args: -d -g forever -n QuestChain-{project-version}
-          pandoc: 'false'
-
-      - uses: actions/upload-artifact@v6
-        if: steps.prepare.outputs.tagged_branch != 'true'
-        with:
-          name: QuestChain-${{ inputs.release_tag || github.sha }}
-          path: .release/*.zip
-          if-no-files-found: error
-          include-hidden-files: true
-
-  publish:
-    needs: package
-    if: inputs.release_tag != '' || (startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push')
+  deploy:
+    needs: checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
-          persist-credentials: false
 
-      - name: Check publication prerequisites
+      - name: Allocate stable version on this merged commit
+        id: version
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: |
           if [[ -z "$CF_API_TOKEN" ]]; then
-            echo "::error::Set the CF_API_TOKEN repository secret before publishing a release."
+            echo '::error::CF_API_TOKEN is required for main deployments.'
             exit 1
           fi
-          bash tools/prepare-release.sh tag "$RELEASE_TAG"
-          releases=$(gh api --paginate "repos/$GH_REPO/releases" --jq '.[].tag_name')
-          if grep -Fxq -- "$RELEASE_TAG" <<< "$releases"; then
-            echo "::error::A release or upload reservation already exists for $RELEASE_TAG. Inspect GitHub and CurseForge before recovery; see README.md."
-            exit 1
+          git fetch origin --tags
+          tag=$(python3 tools/release-version.py)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if [[ -n "$(git tag --points-at HEAD --list "$tag")" ]]; then
+            if ! release=$(gh release view "$tag" --json isDraft,isPrerelease,assets); then
+              echo '::error::An earlier deployment reserved this version. Inspect its upload logs and retained files before retrying an uncertain CurseForge POST.'
+              exit 1
+            fi
+            if ! jq -e --arg zip "QuestChain-$tag.zip" '
+              .isDraft == false and .isPrerelease == false
+              and ([.assets[].name] | index($zip) != null and index("release.json") != null
+                and index("curseforge-upload.json") != null)
+            ' <<< "$release" > /dev/null; then
+              echo '::error::An earlier deployment is incomplete. Inspect its retained upload files before retrying an uncertain CurseForge POST.'
+              exit 1
+            fi
+            echo 'complete=true' >> "$GITHUB_OUTPUT"
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git tag -a "$tag" -m "QuestChain $tag"
+            git push origin "refs/tags/$tag"
           fi
 
-      - name: Prepare single-attempt publisher
+      - name: Build once and upload the same GA ZIP to both hosts
+        if: steps.version.outputs.complete != 'true'
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          GH_API_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         run: |
           curl --fail --silent --show-error --location \
             https://raw.githubusercontent.com/BigWigsMods/packager/01e8631a69c69d7654c788d152630d5fed9e3812/release.sh \
             --output "$RUNNER_TEMP/questchain-publisher.sh"
           python3 tools/prepare-publisher.py "$RUNNER_TEMP/questchain-publisher.sh"
+          # Give BigWigs the generated tag context so a main push is packaged as GA.
+          GITHUB_REF="refs/tags/$RELEASE_TAG" GITHUB_REF_NAME="$RELEASE_TAG" \
+            bash "$RUNNER_TEMP/questchain-publisher.sh" -g forever -n 'QuestChain-{project-version}'
+          gh release upload "$RELEASE_TAG" .release/curseforge-upload.json
 
-      - name: Reserve publication
-        id: reservation
-        run: |
-          reservation_id=$(gh api --method POST "repos/$GH_REPO/releases" \
-            -f tag_name="$RELEASE_TAG" -f name="QuestChain $RELEASE_TAG" \
-            -f body="Publication in progress. If interrupted, check CurseForge before retrying; see the repository's release recovery instructions." \
-            -F draft=true --jq '.id')
-          echo "id=$reservation_id" >> "$GITHUB_OUTPUT"
-
-      - name: Publish tested tag to CurseForge and GitHub
-        run: bash "$RUNNER_TEMP/questchain-publisher.sh" -g forever -n 'QuestChain-{project-version}'
-        env:
-          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          GH_API_TOKEN: ${{ github.token }}
-
-      - name: Retain publication files for recovery
+      - name: Retain the actual deployment files
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: QuestChain-publication-${{ env.RELEASE_TAG }}
+          name: QuestChain-${{ steps.version.outputs.tag }}
           path: |
             .release/*.zip
             .release/release.json
-            .release/ForeverQuestChain/CHANGELOG.md
-          if-no-files-found: ignore
+            .release/curseforge-upload.json
           include-hidden-files: true
+          if-no-files-found: ignore
 
-      - name: Verify published release
-        run: |
-          release=$(gh release view "$RELEASE_TAG" --json isDraft,isPrerelease,assets,url)
-          jq -e --arg zip "QuestChain-$RELEASE_TAG.zip" '
-            .isDraft == false
-            and ([.assets[].name] | index($zip) != null and index("release.json") != null)
-          ' <<< "$release"
-          gh release download "$RELEASE_TAG" --pattern release.json --dir "$RUNNER_TEMP/questchain-published"
-          interface=$(awk '/^## Interface:/ {print $3; exit}' ForeverQuestChain/ForeverQuestChain.toc)
-          jq -e --arg version "$RELEASE_TAG" --argjson interface "$interface" '
-            .releases | length == 1 and (.[0] |
-              .version == $version and .filename == ("QuestChain-" + $version + ".zip")
-              and .metadata == [{flavor:"forever", interface:$interface}])
-          ' "$RUNNER_TEMP/questchain-published/release.json"
-          {
-            printf 'Published QuestChain %s\n\n' "$RELEASE_TAG"
-            jq -r '.url' <<< "$release"
-            printf '\nCurseForge project: 1792071. File approval and search indexing may follow publication.\n'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Remove unused publication reservation
+      - name: Verify stable release and identical uploaded bytes
         env:
-          RESERVATION_ID: ${{ steps.reservation.outputs.id }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          SOURCE_SHA: ${{ github.sha }}
         run: |
-          # GitHub can keep a draft separate from the packager's published release.
-          # Delete only our recorded draft; never delete the published release/tag.
-          reservation=$(gh api "repos/$GH_REPO/releases/$RESERVATION_ID")
-          if jq -e --arg tag "$RELEASE_TAG" '.draft == true and .tag_name == $tag' <<< "$reservation" > /dev/null; then
-            gh api --method DELETE "repos/$GH_REPO/releases/$RESERVATION_ID"
-          fi
+          gh release download "$RELEASE_TAG" --pattern '*.zip' --pattern release.json \
+            --pattern curseforge-upload.json --dir "$RUNNER_TEMP/questchain-published"
+          cd "$RUNNER_TEMP/questchain-published"
+          jq -e --arg tag "$RELEASE_TAG" --arg source "$SOURCE_SHA" '
+            (.id | type == "number") and .version == $tag and .sourceCommit == $source
+            and .filename == ("QuestChain-" + $tag + ".zip") and .releaseType == "release"
+          ' curseforge-upload.json
+          jq -r '.sha256 + "  " + .filename' curseforge-upload.json | sha256sum --check
+          jq -e --arg tag "$RELEASE_TAG" '
+            .releases | length == 1 and (.[0] | .version == $tag
+              and .filename == ("QuestChain-" + $tag + ".zip")
+              and .metadata == [{flavor:"forever",interface:16001}])
+          ' release.json
+          gh release view "$RELEASE_TAG" --json isDraft,isPrerelease \
+            --jq '(.isDraft == false and .isPrerelease == false)' | grep -Fx true
+          {
+            printf 'Published %s from %s to GitHub and CurseForge as Release.\n\n' "$RELEASE_TAG" "$SOURCE_SHA"
+            printf 'GitHub: https://github.com/%s/releases/tag/%s\n\n' "$GH_REPO" "$RELEASE_TAG"
+            printf 'CurseForge project 1792071, file %s\n\n' "$(jq -r '.id' curseforge-upload.json)"
+            printf 'The GitHub ZIP matches the checksum of the ZIP uploaded to CurseForge.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
