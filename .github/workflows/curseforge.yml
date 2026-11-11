@@ -6,13 +6,22 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Existing tag created by Release QuestChain
+        required: true
+        type: string
+    secrets:
+      CF_API_TOKEN:
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: questchain-package-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  group: questchain-package-${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
+  cancel-in-progress: ${{ inputs.release_tag == '' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   package:
@@ -20,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -31,6 +41,7 @@ jobs:
             lua5.1 "$test"
           done
           luac5.1 -p ForeverQuestChain/*.lua
+          python3 tests/release.py
 
       - name: Test release packaging without publishing
         env:
@@ -45,8 +56,8 @@ jobs:
       - name: Prepare packaged version
         id: prepare
         env:
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ inputs.release_tag && 'tag' || github.ref_type }}
+          REF_NAME: ${{ inputs.release_tag || github.ref_name }}
         run: |
           bash tools/prepare-release.sh "$REF_TYPE" "$REF_NAME"
           # BigWigs skips branch pushes at a tagged commit; that tag owns the package.
@@ -64,24 +75,25 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: steps.prepare.outputs.tagged_branch != 'true'
         with:
-          name: QuestChain-${{ github.sha }}
+          name: QuestChain-${{ inputs.release_tag || github.sha }}
           path: .release/*.zip
           if-no-files-found: error
           include-hidden-files: true
 
   publish:
     needs: package
-    if: startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'
+    if: inputs.release_tag != '' || (startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -126,7 +138,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: QuestChain-publication-${{ github.ref_name }}
+          name: QuestChain-publication-${{ env.RELEASE_TAG }}
           path: |
             .release/*.zip
             .release/release.json

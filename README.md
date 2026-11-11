@@ -47,16 +47,19 @@ Versions follow `major.minor.patch`: increment patch for fixes, minor for featur
 
 The **Package QuestChain** workflow runs Lua 5.1 fixtures and real packaging checks for pull requests, pushes to `main`, and manual runs. Branch builds remain GitHub Actions artifacts; they are not uploaded to CurseForge. BigWigs stamps the packaged TOC and ZIP with the Git-derived build version. Development versions include the source commit once they are past a release tag.
 
-To publish:
+To publish, open **Actions → Release QuestChain → Run workflow** on `main`:
 
-1. Update `## Version` in `ForeverQuestChain/ForeverQuestChain.toc` and commit the changes to `main`.
-2. Verify CI and playtest affected runtime changes in Forever.
-3. Create and push the matching tag, for example:
+1. Choose `patch` for fixes, `minor` for features, or `exact` to enter a specific version without the `v` prefix. Use `exact` for major releases and beta progression or promotion.
+2. Check **Preview** first if you want to inspect the candidate version and installable ZIP. Preview runs do not push commits, create remote tags, or publish files.
+3. For a release, leave Preview unchecked. The action updates only the TOC version, creates a local version commit and tag, runs the Lua and packaging checks, then pushes the commit and tag together. It invokes **Package QuestChain** directly to test and publish that exact tag.
 
-   ```sh
-   git tag -a v0.1.0 -m "QuestChain 0.1.0"
-   git push origin v0.1.0
-   ```
+Playtest affected runtime changes in Forever before releasing. The action requires the current `main` commit and respects branch protection. If `main` advances during verification, its atomic push fails without creating a partial release; start a new run. A failed publication after the push leaves the version commit and tag in place; follow the recovery instructions below.
+
+The workflow uses GitHub's built-in token. Its automated tag push does not start another push workflow, so the release action explicitly calls our packaging workflow. No additional personal access token is required. BigWigs remains the pinned packaging tool running inside our GitHub runner; our repository owns the version bump, tests, package configuration, and publication controls.
+
+Use meaningful Conventional Commit prefixes such as `fix:`, `feat:`, and `chore:` for release notes. The action uses the bump you select; it does not infer versions from commit messages.
+
+Manual releases still work: update and commit the TOC version yourself, then push its matching annotated tag, for example `git tag -a v0.1.1 -m "QuestChain 0.1.1"` followed by `git push origin v0.1.1`.
 
 Tagged pushes publish the same packaged build to CurseForge and a GitHub Release. Stable tags use CurseForge's **Release** channel; `-beta.N` tags use **Beta** and a GitHub prerelease. GitHub releases contain an installable ZIP, changelog, and BigWigs `release.json` with the Forever flavor for addon managers. Keep released tags immutable; publish a new version for changes.
 

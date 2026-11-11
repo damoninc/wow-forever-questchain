@@ -95,10 +95,27 @@ class PackageTests(unittest.TestCase):
         self.run_command("git", "tag", "-d", "v" + self.version)
         beta = "0.2.0-beta.1"
         self.toc_path.write_text(re.sub(r"^## Version: .+$", "## Version: " + beta, self.toc_path.read_text(), flags=re.M))
-        self.run_command("git", "commit", "-qam", "Beta fixture")
+        self.run_command("git", "commit", "--allow-empty", "-qam", "Beta fixture")
         self.run_command("git", "tag", "v" + beta)
         self.prepare("tag", "v" + beta)
         self.assert_package(self.package(), "v" + beta)
+
+    def test_bumped_release_candidate_uses_new_source_version(self):
+        args = ["python3", str(self.repo / "tools/bump-version.py")]
+        if "-beta." in self.version:
+            args += ["exact", "--version", self.version.split("-beta.")[0]]
+        else:
+            args.append("patch")
+        version = self.run_command(*args).stdout.strip()
+        self.assertNotEqual(version, self.version)
+        self.run_command("git", "add", "ForeverQuestChain/ForeverQuestChain.toc")
+        self.run_command("git", "commit", "-qm", f"chore(release): v{version}")
+        self.run_command("git", "tag", "-a", "v" + version, "-m", "Release candidate")
+        self.prepare("tag", "v" + version)
+        self.assert_package(self.package(), "v" + version)
+        committed_toc = self.run_command("git", "show", "HEAD:ForeverQuestChain/ForeverQuestChain.toc").stdout
+        self.assertIn(f"## Version: {version}", committed_toc)
+        self.assertNotIn("@project-version@", committed_toc)
 
     def test_development_before_first_release(self):
         self.run_command("git", "tag", "-d", "v" + self.version)
