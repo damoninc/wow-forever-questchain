@@ -12,7 +12,7 @@ Search by title or quest ID. Linear steps run down the center of the timeline. S
 
 Right-click a quest in WoW's Quest Log and choose **Open in QuestChain** to jump to its step. The quest details page also has an **Open in QuestChain** button beside **Back**.
 
-**Active Chains** shows each known chain with a quest in your log once. Selecting a chain opens a step ready to turn in when one is available. Use **Back** to return to the list.
+**Active Chains** groups known chains with quests in your log into collapsible dungeon and zone sections. Dungeon chains include preparation steps picked up elsewhere. Other chains appear under the pickup zones of their active steps. A chain appears once per matching section, and the tab's total counts distinct chains. Sections start expanded and remember their state while the addon is loaded. Selecting a chain opens a step ready to turn in when one is available. Use **Back** to return to the list.
 
 Use the breadcrumbs above the timeline to go back to Browse or reopen the current zone, dungeon, or class list. The trail keeps the category you opened the chain from. When opening from the quest log, it uses the selected quest's known category. A verified dungeon assignment takes priority over the pickup zone. **Earlier quests** jumps to a preceding step in the current chain.
 

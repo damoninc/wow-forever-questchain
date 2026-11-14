@@ -238,7 +238,8 @@ local function showActiveChains()
             end
         end
     end
-    window:ShowActiveChains(browseIndex:ActiveChains(logged))
+    local groups, count = browseIndex:ActiveChainGroups(logged)
+    window:ShowActiveChains(groups, nil, count)
 end
 
 local function search(query)
