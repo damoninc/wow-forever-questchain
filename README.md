@@ -8,27 +8,31 @@ QuestChain is an in-game quest-chain reference for **WoW: Forever**. Look up a q
 2. Download the installable ZIP from [GitHub Releases](https://github.com/damoninc/wow-forever-questchain/releases) and extract it into your Forever client's `Interface/AddOns` directory. The ZIP contains the `ForeverQuestChain` folder. For a source checkout, copy that folder from this repository instead.
 3. Enable **QuestChain** in the AddOns list. Click the book icon by the minimap or run `/questchain` in chat. Drag the icon to move it. If the new addon is absent from the AddOns list, restart the client.
 
-Search by title or quest ID. Linear steps run down the center of the timeline. Sibling branches sit side by side and reconnect at their shared next step. Hold **Shift** while scrolling to pan wide branches.
+The journal has four main tabs: **Search**, **Zones**, **Dungeons**, and **Active Chains**. Search by title or quest ID, or choose a location card to explore its **Quests** and **Rewards** sections. Location cards sort by level and offer name and level filters. **Current Zone** opens the quests for your current location.
+
+Location cards use Blizzard's journal borders and title styling. Classic dungeons use the client's journal thumbnails, and zones use the client's map tiles. Locations without available artwork use parchment. Hover a card to see its chain and standalone quest counts.
+
+Opening a quest drills into its timeline within the current tab. **Back** returns to the list or reward sources you came from. Linear steps run down the center of the timeline. Sibling branches sit side by side and reconnect at their shared next step. Hold **Shift** while scrolling to pan wide branches.
 
 Right-click a quest in WoW's Quest Log and choose **Open in QuestChain** to jump to its step. The quest details page also has an **Open in QuestChain** button beside **Back**.
 
-**Active Chains** shows each known chain with a quest in your log once. Selecting a chain opens a step ready to turn in when one is available. Use **Back** to return to the list.
+**Active Chains** groups known chains with quests in your log into collapsible dungeon and zone sections. Dungeon chains include preparation steps picked up elsewhere. Other chains appear under the pickup zones of their active steps. A chain appears once per matching section, and the tab's total counts distinct chains. Sections start expanded and remember their state while the addon is loaded. Selecting a chain opens a step ready to turn in when one is available. Use **Back** to return to the list.
 
-Use the breadcrumbs above the timeline to go back to Browse or reopen the current zone, dungeon, or class list. The trail keeps the category you opened the chain from. When opening from the quest log, it uses the selected quest's known category. A verified dungeon assignment takes priority over the pickup zone. **Earlier quests** jumps to a preceding step in the current chain.
+Use the breadcrumbs above the timeline to return to the location cards or reopen the current zone, dungeon, or class list. The trail keeps the category you opened the chain from. When opening from the quest log, it uses the selected quest's known category. A verified dungeon assignment takes priority over the pickup zone. **Earlier quests** jumps to a preceding step in the current chain.
 
-Open the **Browse** tab to search by name or ID, or choose **By category** for **Zones**, **Dungeons**, and **Classes**. Zone results follow pickup locations, so a chain can appear in several zones with different steps under each. **Current Zone**, **My Class**, and **Hide completed** help narrow the list. Selecting a quest opens the **Chain** tab at that step. Return to **Browse** to resume from the same list position.
+Zone results follow pickup locations, so a chain can appear in several zones with different steps under each. **Class quests** on the Search page opens your class's quests, with a picker for other classes. Zone and dungeon tabs remember their selected location, quest filters, page, and list position independently while the addon is loaded.
 
-The **Quest log** column in Search and By category shows **In progress**, **Ready to turn in**, **Completed**, or **Not in log** for your current character.
+The **Quest log** column in Search and the **Status** column in location quests show your current character's progress.
 
 Search results and timeline cards show how many party members currently have that quest in their log. Hover the row or card for names. Party members can appear without installing QuestChain.
 
-In **By category**, choose **Show completed** to find finished quests in the selected zone, dungeon, or class. **Show all** clears the filter.
+In a location's **Quests** section, use **Hide completed** or **Show completed** to narrow the list. **Show all** clears the filter. These controls also work in class browsing.
 
 In category browsing, chain rows come first, followed by standalone quests. Each group sorts by level, lowest first, with unknown levels at the end. A chain uses its lowest known quest level and shows progress for the steps in that category. Click it to open the timeline at a relevant step. A partly finished chain can appear under **Show completed**, which opens it at a completed step. Search results sort by quest level.
 
 Zone and dungeon pickers also sort by level and show a range when available. Ranges come from the game map when it supplies them, or from the category's quest levels. Dungeon chains include linked steps outside the instance when opened.
 
-Open **Rewards** to browse items awarded by quests in a zone or dungeon. Search by item name or ID and hover an item for its tooltip. Choose a source quest to open its chain, then return to **Rewards** to resume browsing. The list uses item-to-quest links available in QuestieDB.
+Select **Rewards** inside a zone or dungeon to browse its quest reward items. Search by item name or ID and hover an item for its tooltip. Choose a source quest to open its chain, then use **Back** to resume browsing. Each location remembers its item search, selected reward, and scroll positions. The list uses item-to-quest links available in QuestieDB.
 
 In **Quest Details**, select **Show on map** under a pickup or turn-in location with known coordinates. The action opens the zone map and adds a TomTom waypoint if TomTom is enabled. Otherwise QuestChain marks the location until you close the world map. Use `/questchain` to return to the selected quest.
 
@@ -36,6 +40,7 @@ Select a step to see its objectives, prerequisites, pickup and turn-in informati
 
 ## Test in Forever
 
+- Open **Dungeons**, select **Scarlet Monastery**, switch between **Quests** and **Rewards**, open a source quest, and use **Back**. Switch to **Zones** and back to check that each tab keeps its place.
 - Search a repeated title such as **The Defias Brotherhood**, open a result, and click a different timeline step.
 - Look up a branch or join such as **Big Game Hunter** (`208`) and a Forever-original quest. Follow the connectors and check the requirements.
 - Compare the panel with Blizzard's quest offer for a quest that awards coin or choice items. Switch quests quickly and verify that the reward details follow your selection.

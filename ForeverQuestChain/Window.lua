@@ -84,6 +84,48 @@ local function makeButton(parent, template)
     return button
 end
 
+local function makeLocationButton(parent)
+    -- Reuse the journal's texture regions directly: Forever does not expose
+    -- EncounterInstanceButtonTemplate, but its artwork needs no XML template.
+    local button = CreateFrame("Button", nil, parent)
+    local sheet = "Interface\\EncounterJournal\\UI-EncounterJournalTextures"
+    button:SetNormalTexture(sheet)
+    button:GetNormalTexture():SetTexCoord(0.00195313, 0.34179688, 0.42871094, 0.52246094)
+    button:SetPushedTexture(sheet)
+    button:GetPushedTexture():SetTexCoord(0.00195313, 0.34179688, 0.33300781, 0.42675781)
+    button:SetHighlightTexture(sheet, "ADD")
+    button:GetHighlightTexture():SetTexCoord(0.34570313, 0.68554688, 0.33300781, 0.42675781)
+
+    button.art = button:CreateTexture(nil, "BACKGROUND")
+    button.art:SetAllPoints()
+    button.title = font(button, "QuestTitleFontBlackShadow", colors.accent)
+    button.title:SetPoint("TOPLEFT", 12, -15)
+    button.title:SetPoint("TOPRIGHT", -12, -15)
+    button.title:SetJustifyH("CENTER")
+    button.title:SetWordWrap(true)
+    button.title:SetMaxLines(2)
+    button.title:SetShadowColor(0, 0, 0, 1)
+    button.title:SetShadowOffset(1, -1)
+    button.level = font(button, "GameFontNormalSmall", colors.accent)
+    button.level:SetPoint("BOTTOMLEFT", 9, 9)
+    button.level:SetPoint("BOTTOMRIGHT", -9, 9)
+    button.level:SetShadowColor(0, 0, 0, 1)
+    button.level:SetShadowOffset(1, -1)
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.category.name)
+        GameTooltip:AddLine(self.level:GetText(), 1, 0.82, 0)
+        GameTooltip:AddLine(self.counts, 1, 1, 1)
+        GameTooltip:AddLine("Click to view quests and rewards.", 0.76, 0.73, 0.66)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
+    button:SetScript("OnHide", button:GetScript("OnLeave"))
+    return button
+end
+
 local function makeControl(parent, title, width)
     local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     button:SetSize(width, 24)
@@ -447,27 +489,21 @@ local function createRewardPage(parent, top, width, height, callbacks)
     local frame = CreateFrame("Frame", nil, parent)
     frame:SetPoint("TOPLEFT", 14, -top)
     frame:SetSize(width, height)
-    local kind = makeBrowseMenu(frame, 12, 28, 168)
-    setupCategoryMenu(kind, config.kinds, nil, config.kind, config.selectKind)
-    local category = makeBrowseMenu(frame, 200, 28, 312)
-    label(frame, "GameFontNormalSmall", colors.muted, 12, 10, 180, "BROWSE BY")
-    label(frame, "GameFontNormalSmall", colors.muted, 200, 10, 312, "LOCATION")
-    label(frame, "GameFontNormalSmall", colors.muted, 532, 10, 260, "FIND AN ITEM")
     local query = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-    query:SetPoint("TOPLEFT", 536, -28)
-    query:SetSize(290, 24)
+    query:SetPoint("TOPLEFT", 19, -48)
+    query:SetSize(400, 24)
     query:SetAutoFocus(false)
     query:SetMaxLetters(100)
-    local hint = label(frame, "GameFontDisableSmall", colors.muted, 540, 34, 272, "Item name or ID")
+    local hint = label(frame, "GameFontDisableSmall", colors.muted, 23, 54, 380, "Find a quest reward by item name or ID")
     query:SetScript("OnTextChanged", function(self)
         local value = self:GetText()
         hint:SetShown(value == "")
-        config.search(value)
+        if not query.updating then config.search(value) end
     end)
     query:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     query:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 
-    local filtersHeight, sourcesWidth, gap = 63, 342, 10
+    local filtersHeight, sourcesWidth, gap = 85, 342, 10
     local listPanelWidth = width - sourcesWidth - gap
     local list, listScroll, listWidth, listPanel, listTitle =
         panel(frame, 0, filtersHeight, listPanelWidth, height - filtersHeight, "QUEST REWARDS")
@@ -482,7 +518,7 @@ local function createRewardPage(parent, top, width, height, callbacks)
     local itemRows, sourceRows = {}, {}
     local selectedId
 
-    local function showItems(entries, selection, message, offset)
+    local function showItems(entries, selection, message, offset, restoredSourceOffset)
         hideAll(itemRows)
         hideAll(sourceRows)
         listTitle:SetText(selection and ("QUEST REWARDS  /  " .. #entries) or "QUEST REWARDS")
@@ -526,6 +562,7 @@ local function createRewardPage(parent, top, width, height, callbacks)
 
         local item = selection and selection.item
         local sourceOffset = item and selectedId == item.id and sourceScroll:GetVerticalScroll() or 0
+        if restoredSourceOffset ~= nil then sourceOffset = restoredSourceOffset end
         selectedId = item and item.id
         sourceTitle:SetText(item and item.name or "")
         sourceMeta:SetPoint("TOPLEFT", 2, -(sourceTitle:GetStringHeight() + 10))
@@ -568,45 +605,247 @@ local function createRewardPage(parent, top, width, height, callbacks)
         updateScroll(sourceScroll, sourceOffset)
     end
 
-    return frame, query, category, listScroll, showItems, resize
+    return frame, query, listScroll, showItems, resize, sourceScroll
+end
+
+local function createLocationPage(parent, top, width, height, openCategory, currentZone)
+    local body, scroll, contentWidth, frame, title = panel(parent, 14, top, width, height, "DUNGEONS")
+    scroll:SetPoint("TOPLEFT", 10, -78)
+    local query = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+    query:SetPoint("TOPLEFT", 19, -39)
+    query:SetSize(360, 24)
+    query:SetAutoFocus(false)
+    query:SetMaxLetters(100)
+    query:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    local hint = label(frame, "GameFontDisableSmall", colors.muted, 23, 45, 330, "Find a location")
+    local levels = makeBrowseMenu(frame, 0, 39, 155)
+    levels:ClearAllPoints()
+    levels:SetPoint("TOPRIGHT", -16, -39)
+    local notice = label(body, "GameFontHighlightSmall", colors.muted, 4, 4, contentWidth - 8, "")
+    local current = makeControl(frame, "Current Zone", 114)
+    current:SetPoint("TOPRIGHT", -16, -5)
+    current:SetScript("OnClick", function()
+        local category = currentZone()
+        if category then openCategory("zones", category.key) end
+    end)
+    local cards, states, artwork, mapArtwork = {}, {}, {}, {}
+    local kind, entries, message, updating
+    local render
+    local function artFor(category)
+        if kind ~= "dungeons" then return end
+        if not artwork.loaded and type(EJ_GetInstanceByIndex) == "function" then
+            for index = 1, 256 do
+                local id, name, _, _, image = EJ_GetInstanceByIndex(index, false)
+                if not id then break end
+                if name and image then artwork[name:lower()] = image end
+            end
+            artwork.loaded = true
+        end
+        return artwork[category.name:lower()] or ns.LocationArt.DungeonTexture(category.key)
+    end
+    local function showMapArt(card, category, width, height)
+        if kind ~= "zones" or category.key <= 0 or not C_Map.GetMapArtLayers
+            or not C_Map.GetMapArtLayerTextures then return false end
+        local map = mapArtwork[category.key]
+        if not map then
+            local layers = C_Map.GetMapArtLayers(category.key)
+            local layer = layers and layers[1]
+            if not layer then return false end
+            local textures = C_Map.GetMapArtLayerTextures(category.key, 1)
+            if not textures or #textures == 0 then return false end
+            map = { layer = layer, textures = textures }
+            mapArtwork[category.key] = map
+        end
+        local tiles = ns.LocationArt.Tiles(map.layer, map.textures, width, height)
+        card.mapTiles = card.mapTiles or {}
+        for index, tile in ipairs(tiles) do
+            local texture = card.mapTiles[index] or card:CreateTexture(nil, "BACKGROUND")
+            card.mapTiles[index] = texture
+            texture:ClearAllPoints()
+            texture:SetPoint("TOPLEFT", tile.x, -tile.y)
+            texture:SetSize(tile.width, tile.height)
+            texture:SetTexture(tile.texture)
+            texture:SetTexCoord(0, tile.right, 0, tile.bottom)
+            texture:Show()
+        end
+        return #tiles > 0
+    end
+    render = function(offset)
+        if not kind then return end
+        hideAll(cards)
+        local state = states[kind]
+        local filter, shown = state.query:lower(), 0
+        local columns = math.max(2, math.floor((contentWidth + 12) / 190))
+        local cardWidth = math.floor((contentWidth - (columns - 1) * 12) / columns)
+        local cardHeight = math.floor(cardWidth * 96 / 174 + 0.5)
+        for _, category in ipairs(entries) do
+            local matchesLevel = not state.mine or not category.minLevel
+                or (UnitLevel("player") >= category.minLevel and UnitLevel("player") <= (category.maxLevel or category.minLevel))
+            if matchesLevel and category.name:lower():find(filter, 1, true) then
+                shown = shown + 1
+                local card = cards[shown]
+                if not card then
+                    card = makeLocationButton(body)
+                    card:SetScript("OnClick", function(self) openCategory(kind, self.category.key) end)
+                    cards[shown] = card
+                end
+                card.category = category
+                card:ClearAllPoints()
+                card:SetPoint("TOPLEFT", ((shown - 1) % columns) * (cardWidth + 12),
+                    -math.floor((shown - 1) / columns) * (cardHeight + 12))
+                card:SetSize(cardWidth, cardHeight)
+                card.title:SetText(category.name)
+                local image = artFor(category)
+                if card.mapTiles then hideAll(card.mapTiles) end
+                if image and card.art:SetTexture(image) then
+                    -- Journal button images occupy the upper-left 175x95 of
+                    -- a 256x128 texture, as in Blizzard's instance template.
+                    card.art:SetTexCoord(0, 0.68359375, 0, 0.7421875)
+                    card.art:Show()
+                elseif showMapArt(card, category, cardWidth, cardHeight) then
+                    card.art:Hide()
+                else
+                    card.art:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Parchment-Horizontal")
+                    card.art:SetTexCoord(0, 1, 0, 1)
+                    card.art:Show()
+                end
+                local level = category.minLevel and (category.minLevel
+                    .. ((category.maxLevel or category.minLevel) > category.minLevel and ("-" .. category.maxLevel) or ""))
+                    or "Level unavailable"
+                local chains, quests = 0, 0
+                for _, group in ipairs(category.groups) do
+                    if group.standalone then quests = quests + 1 else chains = chains + 1 end
+                end
+                card.counts = chains .. (chains == 1 and " chain" or " chains")
+                    .. "  /  " .. quests .. (quests == 1 and " quest" or " quests")
+                card.level:SetText(level)
+                card:Show()
+            end
+        end
+        notice:SetText(message or "No matching locations.")
+        notice:SetShown(shown == 0)
+        title:SetText((kind == "dungeons" and "DUNGEONS" or "ZONES") .. "  /  " .. shown)
+        resetScroll(scroll, body, math.max(32, math.ceil(shown / columns) * (cardHeight + 12)), offset or state.offset)
+    end
+    scroll:HookScript("OnVerticalScroll", function(self)
+        if kind then states[kind].offset = self:GetVerticalScroll() end
+    end)
+    query:SetScript("OnTextChanged", function(self)
+        hint:SetShown(self:GetText() == "")
+        if updating or not kind then return end
+        states[kind].query, states[kind].offset = self:GetText(), 0
+        render(0)
+    end)
+    levels:SetupMenu(function(_, menu)
+        for _, option in ipairs({ { name = "All levels", mine = false }, { name = "My level", mine = true } }) do
+            local mine = option.mine
+            menu:CreateRadio(option.name, function() return kind and states[kind].mine == mine end, function()
+                states[kind].mine, states[kind].offset = mine, 0
+                render(0)
+            end)
+        end
+    end)
+    local function show(_, nextKind, categories, text)
+        kind, entries, message = nextKind, categories, text
+        states[kind] = states[kind] or { query = "", mine = false, offset = 0 }
+        updating = true
+        query:SetText(states[kind].query)
+        updating = false
+        levels:GenerateMenu()
+        current:SetShown(kind == "zones")
+        current:SetEnabled(currentZone() ~= nil)
+        render(states[kind].offset)
+    end
+    local function resize(newWidth, newHeight)
+        local offset = scroll:GetVerticalScroll()
+        frame:SetSize(newWidth, newHeight)
+        contentWidth = newWidth - panelInset
+        body:SetWidth(contentWidth)
+        notice:SetWidth(contentWidth - 8)
+        render(offset)
+    end
+    return frame, show, resize
 end
 
 local function createActiveChainsPage(parent, top, width, height, openQuest)
     local body, scroll, contentWidth, frame, title = panel(parent, 14, top, width, height, "ACTIVE CHAINS")
-    local rows = {}
+    local rows, headers, collapsed = {}, {}, {}
+    local groups, currentMessage, chainCount = {}, nil, 0
     local notice = label(body, "GameFontHighlightSmall", colors.muted, 6, 4, contentWidth - 12, "")
 
-    local function showChains(_, entries, message)
+    local render
+    render = function()
         local offset = scroll:GetVerticalScroll()
         hideAll(rows)
-        notice:SetText(message or "No active quest chains.")
-        notice:SetShown(#entries == 0)
-        title:SetText(message and "ACTIVE CHAINS" or ("ACTIVE CHAINS  /  %d"):format(#entries))
-        for index, entry in ipairs(entries) do
-            local row = rows[index]
-            if not row then
-                row = makeButton(body)
-                row.title:SetPoint("TOPRIGHT", -8, -6)
-                row.meta:SetPoint("TOPRIGHT", -8, -24)
-                row:SetScript("OnClick", function(self)
-                    openQuest(self.step.quest.id, self.step.destination)
+        hideAll(headers)
+        notice:SetText(currentMessage or "No active quest chains.")
+        notice:SetShown(#groups == 0)
+        title:SetText(currentMessage and "ACTIVE CHAINS" or ("ACTIVE CHAINS  /  %d"):format(chainCount))
+        local y, rowIndex = 4, 0
+        for index, group in ipairs(groups) do
+            local header = headers[index]
+            if not header then
+                header = makeButton(body)
+                header.title:ClearAllPoints()
+                header.title:SetPoint("LEFT", 8, 0)
+                header.title:SetPoint("RIGHT", -8, 0)
+                header.title:SetTextColor(unpack(colors.accent))
+                header.meta:Hide()
+                header:SetScript("OnClick", function(self)
+                    collapsed[self.groupKey] = not collapsed[self.groupKey]
+                    render()
                 end)
-                rows[index] = row
+                headers[index] = header
             end
-            row.step = entry.step
-            row:SetPoint("TOPLEFT", 0, -((index - 1) * 44 + 4))
-            row:SetSize(contentWidth, 42)
-            row.title:SetText(entry.title)
-            local quest, log = entry.step.quest, entry.log
-            local status = statuses[log.status]
-            local active = entry.count == 1 and "1 active step" or (entry.count .. " active steps")
-            local level = log.level or quest.level
-            local context = (level and ("  /  Level " .. level) or "") .. (log.zone and ("  /  " .. log.zone) or "")
-            row.meta:SetText(status[1] .. "  /  " .. active .. "  /  " .. quest.title .. " (#" .. quest.id .. ")" .. context)
-            row.meta:SetTextColor(status[2], status[3], status[4])
-            row:Show()
+            header.groupKey = group.key
+            header:ClearAllPoints()
+            header:SetPoint("TOPLEFT", 0, -y)
+            header:SetSize(contentWidth, 30)
+            local count = #group.rows
+            local countText = count == 1 and "1 chain" or (count .. " chains")
+            local kind = group.kind == "dungeons" and "Dungeon" or "Zone"
+            header.title:SetText((collapsed[group.key] and "+  " or "-  ") .. group.category.name
+                .. "  /  " .. kind .. "  /  " .. countText)
+            header:Show()
+            y = y + 34
+            if not collapsed[group.key] then
+                for _, entry in ipairs(group.rows) do
+                    rowIndex = rowIndex + 1
+                    local row = rows[rowIndex]
+                    if not row then
+                        row = makeButton(body)
+                        row.title:SetPoint("TOPRIGHT", -8, -6)
+                        row.meta:SetPoint("TOPRIGHT", -8, -24)
+                        row:SetScript("OnClick", function(self)
+                            openQuest(self.step.quest.id, self.step.destination, self.context)
+                        end)
+                        rows[rowIndex] = row
+                    end
+                    row.step = entry.step
+                    row.context = { kind = group.kind, category = group.category }
+                    row:ClearAllPoints()
+                    row:SetPoint("TOPLEFT", 12, -y)
+                    row:SetSize(contentWidth - 12, 42)
+                    row.title:SetText(entry.title)
+                    local quest, log = entry.step.quest, entry.log
+                    local status = statuses[log.status]
+                    local active = entry.count == 1 and "1 active step" or (entry.count .. " active steps")
+                    local level = log.level or quest.level
+                    local context = (level and ("  /  Level " .. level) or "") .. (log.zone and ("  /  " .. log.zone) or "")
+                    row.meta:SetText(status[1] .. "  /  " .. active .. "  /  " .. quest.title .. " (#" .. quest.id .. ")" .. context)
+                    row.meta:SetTextColor(status[2], status[3], status[4])
+                    row:Show()
+                    y = y + 44
+                end
+            end
+            y = y + 6
         end
-        resetScroll(scroll, body, math.max(32, #entries * 44 + 4), offset)
+        resetScroll(scroll, body, math.max(32, y), offset)
+    end
+
+    local function showChains(_, entries, message, count)
+        groups, currentMessage, chainCount = entries, message, count or 0
+        render()
     end
 
     local function resize(newWidth, newHeight)
@@ -617,7 +856,8 @@ local function createActiveChainsPage(parent, top, width, height, openQuest)
             contentWidth = newContentWidth
             body:SetWidth(contentWidth)
             notice:SetWidth(contentWidth - 12)
-            for _, row in ipairs(rows) do row:SetWidth(contentWidth) end
+            for _, row in ipairs(rows) do row:SetWidth(contentWidth - 12) end
+            for _, header in ipairs(headers) do header:SetWidth(contentWidth) end
         end
         updateScroll(scroll, offset)
     end
@@ -670,21 +910,23 @@ function Window.New(callbacks)
     footer:SetHeight(42)
     footer.minTabWidth = 92
     local catalogTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
-    catalogTab:SetText("Browse")
+    catalogTab:SetText("Search")
     catalogTab:SetPoint("TOPLEFT", 13, -2)
-    local chainTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
-    chainTab:SetText("Chain")
-    local rewardsTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
-    rewardsTab:SetText("Rewards")
+    local zonesTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
+    zonesTab:SetText("Zones")
+    local dungeonsTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
+    dungeonsTab:SetText("Dungeons")
     local activeChainsTab = CreateFrame("Button", nil, footer, "PanelTabButtonTemplate")
     activeChainsTab:SetText("Active Chains")
-    footer.Tabs = { catalogTab, chainTab, rewardsTab, activeChainsTab }
+    footer.Tabs = { catalogTab, zonesTab, dungeonsTab, activeChainsTab }
     PanelTemplates_SetNumTabs(footer, #footer.Tabs)
-    PanelTemplates_SetTabEnabled(footer, 2, false)
 
     local catalogWidth, bodyHeight = defaultWidth - 2 * sideMargin, defaultHeight - bodyTop - bodyBottom
-    local rewardPage, rewardQuery, rewardCategory, rewardScroll, showRewardItems, resizeRewardPage =
+    local rewardPage, rewardQuery, rewardScroll, showRewardItems, resizeRewardPage, rewardSourceScroll =
         createRewardPage(frame, bodyTop, catalogWidth, bodyHeight, callbacks)
+    local window
+    local locationPage, showLocations, resizeLocations = createLocationPage(frame, bodyTop, catalogWidth, bodyHeight,
+        function(kind, key) window:OpenCategory(kind, key) end, callbacks.currentZone)
     local activeChainsPage, showActiveChains, resizeActiveChains =
         createActiveChainsPage(frame, bodyTop, catalogWidth, bodyHeight, callbacks.openQuest)
     local chainBody, chainScroll, chainWidth, chainPanel =
@@ -694,7 +936,7 @@ function Window.New(callbacks)
     chainTitle:SetWordWrap(false)
     local chainContext = label(chainPanel, "GameFontHighlightSmall", colors.muted, 12, 59, chainWidth, "")
     local browseCrumb = makeBreadcrumb(chainPanel)
-    setBreadcrumbText(browseCrumb, "Browse")
+    setBreadcrumbText(browseCrumb, "Back")
     browseCrumb:SetPoint("TOPLEFT", 12, -77)
     local kindSeparator = font(chainPanel, "GameFontHighlightSmall", colors.muted)
     kindSeparator:SetText("›")
@@ -716,7 +958,7 @@ function Window.New(callbacks)
     local resultsTop = 85
     catalog:SetPoint("TOPLEFT", sideMargin, -bodyTop)
     catalog:SetSize(catalogWidth, bodyHeight)
-    label(catalog, "GameFontNormalLarge", colors.accent, 12, 9, 260, "Quest catalog")
+    local catalogTitle = label(catalog, "GameFontNormalLarge", colors.accent, 12, 9, 260, "Find a quest")
 
     local search = CreateFrame("EditBox", nil, catalog, "InputBoxTemplate")
     search:SetPoint("TOPLEFT", 19, -48)
@@ -737,25 +979,13 @@ function Window.New(callbacks)
         hint:SetShown(self:GetText() == "")
     end)
 
-    local function modeButton(x, title, browseMode)
-        local button = makeControl(catalog, title, 106)
-        button:SetPoint("TOPLEFT", x, -8)
-        button:SetScript("OnClick", function() callbacks.setBrowseMode(browseMode) end)
-        return button
-    end
-    local searchMode = modeButton(254, "Search", false)
-    local browseMode = modeButton(366, "By category", true)
-    searchMode:Disable()
-
-    local kindMenu = makeBrowseMenu(catalog, 12, 48, 168)
-    kindMenu:SetupMenu(function(_, menu)
-        for _, option in ipairs(callbacks.browseKinds) do
-            local key = option.key
-            menu:CreateRadio(option.name, function() return callbacks.browseKind() == key end,
-                function() callbacks.selectBrowseKind(key) end)
-        end
-    end)
-    local categoryMenu = makeBrowseMenu(catalog, 200, 48, 310)
+    local classButton = makeControl(catalog, "Class quests", 118)
+    classButton:SetPoint("TOPRIGHT", -12, -8)
+    classButton:SetScript("OnClick", function() callbacks.openClassQuests() end)
+    local categoryMenu = makeBrowseMenu(catalog, 12, 48, 310)
+    local categoryHint = label(catalog, "GameFontHighlightSmall", colors.muted, 12, 54, 470,
+        "Quest chains and standalone quests")
+    categoryHint:Hide()
     local hideCompleted = CreateFrame("CheckButton", nil, catalog, "UICheckButtonTemplate")
     hideCompleted:SetPoint("TOPLEFT", 524, -48)
     hideCompleted:SetSize(22, 22)
@@ -770,7 +1000,6 @@ function Window.New(callbacks)
     showCompleted:SetScript("OnClick", function()
         callbacks.setCompletedFilter(not completedOnly and "completed" or nil)
     end)
-    kindMenu:Hide()
     categoryMenu:Hide()
     hideCompleted:Hide()
     showCompleted:Hide()
@@ -840,50 +1069,105 @@ function Window.New(callbacks)
     resetScroll(resultScroll, resultBody, 32, 0)
     resetScroll(chainScroll, chainBody, 32, 0)
 
-    local window = { ShowDetails = showDetails, ShowActiveChains = showActiveChains }
+    window = { ShowDetails = showDetails, ShowActiveChains = showActiveChains, ShowLocations = showLocations }
+    local journal = ns.Journal.New()
     local browsing = false
-    local currentPage, backPage = "browse", "browse"
-    local tabIndex = { browse = 1, chain = 2, rewards = 3, activeChains = 4 }
+    local tabIndex = { search = 1, zones = 2, dungeons = 3, activeChains = 4 }
+    local locationNav = CreateFrame("Frame", nil, frame)
+    locationNav:SetPoint("TOPLEFT", sideMargin + 12, -(bodyTop + 8))
+    locationNav:SetPoint("TOPRIGHT", -sideMargin - 12, -(bodyTop + 8))
+    locationNav:SetHeight(26)
+    local home = makeBreadcrumb(locationNav)
+    home:SetPoint("LEFT")
+    local locationTitle = font(locationNav, "GameFontNormalLarge", colors.accent)
+    locationTitle:SetPoint("LEFT", home, "RIGHT", 12, 0)
+    locationTitle:SetPoint("RIGHT", -236, 0)
+    locationTitle:SetWordWrap(false)
+    local questsSection = makeControl(locationNav, "Quests", 104)
+    questsSection:SetPoint("RIGHT", -112, 0)
+    local rewardsSection = makeControl(locationNav, "Rewards", 104)
+    rewardsSection:SetPoint("RIGHT")
+    home:SetScript("OnClick", function() window:OpenLocations(journal.route.kind) end)
+    questsSection:SetScript("OnClick", function()
+        window:OpenCategory(journal.route.kind, journal.route.key)
+    end)
+    rewardsSection:SetScript("OnClick", function()
+        window:OpenCategory(journal.route.kind, journal.route.key, "rewards")
+    end)
 
-    local function showPage(page)
-        currentPage = page
-        local open, chain = page == "browse", page == "chain"
+    local function showPage()
+        local route = journal.route
+        local page = route.page
+        local open, chain = page == "search" or page == "quests", page == "chain"
         catalog:SetShown(open)
         chainPanel:SetShown(chain)
         detailPanel:SetShown(chain)
+        locationPage:SetShown(page == "locations")
         rewardPage:SetShown(page == "rewards")
         activeChainsPage:SetShown(page == "activeChains")
+        local scoped = page == "quests" or page == "rewards"
+        locationNav:SetShown(scoped)
+        catalogTitle:SetShown(not scoped)
+        classButton:SetShown(page == "search")
+        if scoped then
+            setBreadcrumbText(home, route.kind == "classes" and "Search" or (route.kind == "zones" and "Zones" or "Dungeons"))
+            locationTitle:SetText(callbacks.categoryName(route.kind, route.key) or "Loading...")
+            questsSection:SetEnabled(page ~= "quests")
+            rewardsSection:SetEnabled(page ~= "rewards")
+            rewardsSection:SetShown(route.kind ~= "classes")
+            questsSection:SetShown(route.kind ~= "classes")
+        end
         rewardQuery:ClearFocus()
-        PanelTemplates_SetTab(footer, tabIndex[page])
+        PanelTemplates_SetTab(footer, tabIndex[route.tab])
         if open and not browsing and frame:IsShown() then
             search:SetFocus()
         else
             search:ClearFocus()
         end
-        if window:IsActiveChainsOpen() then callbacks.openActiveChains() end
+    end
+
+    local function navigate()
+        showPage()
+        callbacks.openJournalRoute(journal.route)
+    end
+
+    function window:Route() return journal.route end
+
+    function window:RefreshNavigation() showPage() end
+
+    function window:OpenLocations(kind)
+        journal:OpenLocations(kind)
+        navigate()
+    end
+
+    function window:OpenCategory(kind, key, section)
+        journal:OpenCategory(kind, key, section)
+        navigate()
     end
 
     function window:IsActiveChainsOpen()
-        return currentPage == "activeChains" and frame:IsShown()
+        return journal.route.page == "activeChains" and frame:IsShown()
     end
 
     function window:SetCatalogOpen(open)
-        if not open and currentPage ~= "chain" then
-            backPage = currentPage == "activeChains" and "activeChains" or "browse"
+        if open then
+            journal:Back()
+            navigate()
+        else
+            journal:OpenQuest()
+            showPage()
         end
-        showPage(open and "browse" or "chain")
     end
 
     browseCrumb:SetScript("OnClick", function() window:SetCatalogOpen(true) end)
-    detailPanel.BackButton:SetScript("OnClick", function() showPage(backPage) end)
-    catalogTab:SetScript("OnClick", function() window:SetCatalogOpen(true) end)
-    chainTab:SetScript("OnClick", function() window:SetCatalogOpen(false) end)
-    rewardsTab:SetScript("OnClick", function()
-        showPage("rewards")
-        callbacks.rewardPage.open()
-    end)
-    activeChainsTab:SetScript("OnClick", function() showPage("activeChains") end)
-    window:SetCatalogOpen(true)
+    detailPanel.BackButton:SetScript("OnClick", function() window:SetCatalogOpen(true) end)
+    for index, tab in ipairs({ "search", "zones", "dungeons", "activeChains" }) do
+        footer.Tabs[index]:SetScript("OnClick", function()
+            if tab == "search" then journal:OpenSearch() else journal:SelectTab(tab) end
+            navigate()
+        end)
+    end
+    showPage()
 
     function window:SetBrowseMode(enabled)
         browsing = enabled
@@ -891,18 +1175,11 @@ function Window.New(callbacks)
         search:SetShown(not enabled)
         find:SetShown(not enabled)
         hint:SetShown(not enabled and search:GetText() == "")
-        kindMenu:SetShown(enabled)
-        categoryMenu:SetShown(enabled)
+        local classes = enabled and journal.route.kind == "classes"
+        categoryMenu:SetShown(classes)
+        categoryHint:SetShown(enabled and not classes)
         hideCompleted:SetShown(enabled)
         showCompleted:SetShown(enabled)
-        if enabled then
-            kindMenu:GenerateMenu()
-            browseMode:Disable()
-            searchMode:Enable()
-        else
-            browseMode:Enable()
-            searchMode:Disable()
-        end
         resultTitle:SetText(enabled and "BROWSE QUESTS" or "SEARCH RESULTS")
         zoneTitle:SetText(enabled and "Type / Progress" or "Zone")
         statusTitle:SetText(enabled and "Status" or "Quest log")
@@ -919,16 +1196,22 @@ function Window.New(callbacks)
         setupCategoryMenu(categoryMenu, options, prompt, callbacks.browseCategory, callbacks.selectBrowseCategory)
     end
 
-    function window:SetRewardCategories(options, prompt)
-        setupCategoryMenu(rewardCategory, options, prompt, callbacks.rewardPage.category, callbacks.rewardPage.selectCategory)
+    function window:SetRewardQuery(value)
+        rewardQuery.updating = true
+        rewardQuery:SetText(value)
+        rewardQuery.updating = nil
     end
 
-    function window:ShowRewardItems(entries, selection, message, offset)
-        showRewardItems(entries, selection, message, offset)
+    function window:ShowRewardItems(entries, selection, message, offset, sourceOffset)
+        showRewardItems(entries, selection, message, offset, sourceOffset)
     end
 
     function window:RewardOffset()
         return rewardScroll:GetVerticalScroll()
+    end
+
+    function window:RewardSourceOffset()
+        return rewardSourceScroll:GetVerticalScroll()
     end
 
     function window:ResultOffset()
@@ -1058,7 +1341,7 @@ function Window.New(callbacks)
                 if option.key == kind then setBreadcrumbText(kindCrumb, option.name) end
             end
             kindCrumb:SetScript("OnClick", function()
-                callbacks.openBrowseCategory(kind, category and category.key)
+                window:OpenLocations(kind)
             end)
         end
         local earlier = ns.Timeline.EarlierSteps(layout, selectedId)
@@ -1092,7 +1375,6 @@ function Window.New(callbacks)
     local lastView, lastSelected, lastStatuses, lastContext
     function window:ShowChain(view, selectedId, statusesById, scrollToId, context)
         lastView, lastSelected, lastStatuses, lastContext = view, selectedId, statusesById, context
-        if chainTab.isDisabled then PanelTemplates_SetTabEnabled(footer, 2, true) end
         local hasParent, optionalSource, structural = {}, {}, {}
         for _, edge in ipairs(view.edges) do
             if edge.kind == "breadcrumb" or edge.kind == "substitute" then
@@ -1234,6 +1516,7 @@ function Window.New(callbacks)
         detailPanel:SetHeight(bodyHeight)
         resizeRewardPage(catalogWidth, bodyHeight)
         resizeActiveChains(catalogWidth, bodyHeight)
+        resizeLocations(catalogWidth, bodyHeight)
 
         if widthChanged then
             resultWidth, chainWidth = catalogWidth - panelInset, chainPanelWidth - panelInset

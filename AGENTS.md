@@ -14,7 +14,7 @@ Keep the path from search to an answer short. Prioritize a readable timeline, ac
 
 - `/questchain` opens the addon. Search by quest name or exact ID, including quests outside the current log. Use quest IDs internally and show enough context to distinguish duplicate titles.
 - Browse groups quests by chain under pickup zone, verified dungeon assignment, or class. A cross-zone chain can appear in each zone with the steps picked up there. Dungeon results include linked chain steps with their dungeon context. Zone and dungeon pickers sort by level, as do catalog results. Selecting a Browse result opens the timeline at that step.
-- The Adventure Guide window uses persistent Browse, Chain, and Rewards tabs. Browse fills the window body and offers Search and By category. Keep filters and page controls outside the scrolling results, and preserve each catalog's mode and position while viewing a chain. The Chain page gives the timeline most of the space and keeps quest details on the right.
+- The journal uses persistent Search, Zones, Dungeons, and Active Chains tabs. Zones and Dungeons open card grids sorted by level, then location pages with Quests and Rewards sections. Class browsing remains accessible from Search. Quest timelines are drilldown pages within their originating tab; Back returns to the originating list or reward sources. Keep filters and page controls outside scrolling results, and preserve each tab's location, filters, page, and position. The timeline gets most of the chain page with quest details on the right.
 - The approved timeline runs top to bottom. Center linear steps, place sibling steps side by side, and draw connectors where paths split or rejoin. Label all-required and any-one-required joins. Keep cards readable on wide forks and support horizontal panning with Shift + mouse wheel.
 - Selecting a search result brings its step into view. Clicking a step within the chain updates the detail panel and preserves the scroll position. Mark the selected step separately from progress, and use text as well as color for quest status.
 - Show objectives and known pickup and turn-in information alongside XP, coin, and item rewards. Separate guaranteed items from pick-one options and use the native item tooltip. Show `Loading` for pending fields, `Unavailable` for inconclusive fields, and zero only for confirmed zero.
@@ -40,6 +40,8 @@ lua tests/rewards.lua
 lua tests/reward-catalog.lua
 lua tests/timeline.lua
 lua tests/browse.lua
+lua tests/journal.lua
+lua tests/location-art.lua
 ```
 
 For changes that affect the game UI or API behavior, also test the affected flow in Forever. Use a linear chain, a fork or join, and an unaccepted quest with visible rewards as relevant. Check that repeated titles remain distinguishable, fast selection changes keep the right details, and quest status refreshes after acceptance or turn-in. Report fixture and live-client verification separately.

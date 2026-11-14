@@ -172,6 +172,27 @@ local optionalChain = browse:ActiveChains({ [2] = { status = "active" }, [5] = {
 assert(optionalChain.step.quest.id == 5 and optionalChain.step.destination == 2,
     "Open the first active step when statuses tie and preserve the optional destination")
 
+local activeGroups, activeCount = browse:ActiveChainGroups({
+    [2] = { status = "active", zone = "Westfall" },
+    [3] = { status = "ready", zone = "Stormwind" },
+    [21] = { status = "active", zone = "Stormwind" },
+})
+assert(activeCount == 2 and #activeGroups == 2, "Count distinct active chains across location sections")
+assert(activeGroups[2].kind == "dungeons" and activeGroups[2].category.key == 1581,
+    "Prefer a verified dungeon over pickup zones")
+assert(#activeGroups[2].rows == 1 and activeGroups[2].rows[1].key == 1
+    and activeGroups[2].rows[1].step.quest.id == 3,
+    "Group a dungeon chain once and keep the ready-to-turn-in step selected")
+assert(activeGroups[1].kind == "zones" and activeGroups[1].category.key == 1
+    and activeGroups[1].rows[1].key == 20,
+    "Group other chains by active pickup zone and sort equal-level sections by name")
+local preparation = browse:ActiveChainGroups({ [5] = { status = "active", zone = "Westfall" } })
+assert(#preparation == 1 and preparation[1].category.key == 1581
+    and preparation[1].rows[1].step.destination == 2,
+    "A preparation step belongs under its chain's dungeon before the dungeon quest is accepted")
+local noActive, noActiveCount = browse:ActiveChainGroups({ [999] = { status = "active" } })
+assert(#noActive == 0 and noActiveCount == 0, "Unknown quests must not invent location groups")
+
 local view = model:Build(5, nil, westfallPlot.steps[1].destination)
 assert(view.focusId == 5 and #view.quests == 5)
 
@@ -228,4 +249,9 @@ for _, id in ipairs({ 95647, 95809 }) do
     assert(#chain.quests == 2 and chain.quests[1].id == 95647 and chain.quests[2].id == 95809)
     assert(#chain.edges == 1 and chain.edges[1].kind == "sequence")
 end
+local missingPickup = ns.Browse.Build(wetlands, wetlands.source):ActiveChainGroups({
+    [95647] = { status = "active" },
+})
+assert(#missingPickup == 1 and missingPickup[1].kind == "zones" and missingPickup[1].category.key == 0,
+    "Keep active chains with missing pickup data visible in the unknown pickup zone section")
 print("browse tests passed")

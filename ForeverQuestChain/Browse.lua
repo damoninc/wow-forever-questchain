@@ -255,6 +255,46 @@ function Browse:ActiveChains(logged)
     return rows
 end
 
+function Browse:ActiveChainGroups(logged)
+    local rows = self:ActiveChains(logged)
+    local zonesByChain = {}
+    for id in pairs(logged) do
+        local step = self.steps[id]
+        local chain = step and step.chain
+        if chain and not chain.standalone and not chain.dungeons then
+            local zones = self.source.pickupZones(id)
+            if #zones == 0 then zones = { unknownZone } end
+            local locations = zonesByChain[chain.key] or {}
+            zonesByChain[chain.key] = locations
+            for _, zone in ipairs(zones) do locations[zone.key] = zone end
+        end
+    end
+
+    local groups, byLocation = {}, {}
+    for _, row in ipairs(rows) do
+        local dungeons = row.step.chain.dungeons
+        local kind = dungeons and "dungeons" or "zones"
+        for key, location in pairs(dungeons or zonesByChain[row.key]) do
+            local identity = kind .. ":" .. key
+            local group = byLocation[identity]
+            if not group then
+                group = { key = identity, kind = kind, category = self:Category(kind, key) or location, rows = {} }
+                byLocation[identity] = group
+                groups[#groups + 1] = group
+            end
+            group.rows[#group.rows + 1] = row
+        end
+    end
+    table.sort(groups, function(a, b)
+        local left, right = a.category, b.category
+        local aLevel, bLevel = left.minLevel or math.huge, right.minLevel or math.huge
+        if aLevel ~= bLevel then return aLevel < bLevel end
+        if left.name:lower() ~= right.name:lower() then return left.name:lower() < right.name:lower() end
+        return a.key < b.key
+    end)
+    return groups, #rows
+end
+
 function Browse:Rows(kind, key, filter, getStatus)
     local rows, standalone = {}, {}
     for _, group in ipairs(self:Groups(kind, key)) do

@@ -13,6 +13,8 @@ Browse.lua
 Rewards.lua
 RewardCatalog.lua
 Timeline.lua
+Journal.lua
+LocationArt.lua
 Map.lua
 Map.xml
 Window.lua
