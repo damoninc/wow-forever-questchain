@@ -16,7 +16,8 @@ local model = ns.Chain.New(source, function()
 end)
 local window, view, selectedId, chainCategory
 local browseIndex, browseBuilding, browsing
-local browse = { kind = "zones", page = 1, offset = 0, lastCategory = {} }
+local browse = { kind = "zones", page = 1, offset = 0 }
+local browseStates, rewardStates = {}, {}
 local rewardCatalog, rewardBuilding, rewardState
 local searchResults, searchMessage, searchOffset = {}, "Search by name or quest ID.", 0
 local player = {
@@ -208,9 +209,6 @@ local function openQuest(id, destination, context)
     end
     view = nextView
     chainCategory = context or categoryForQuest(model:GetQuest(id))
-    if chainCategory and chainCategory.category then
-        browse.lastCategory[chainCategory.kind] = chainCategory.category.key
-    end
     window:Show()
     selectStep(id, id)
     return true
@@ -334,7 +332,7 @@ local function showBrowse(offset)
     window:ShowBrowse(entries, message, offset, pageNumber, pageCount)
 end
 
-local function showRewardCatalog(offset)
+local function showRewardCatalog(offset, sourceOffset)
     local entries, selected, message = {}, nil, nil
     if rewardBuilding or browseBuilding then
         message = "Loading quest rewards..."
@@ -354,17 +352,16 @@ local function showRewardCatalog(offset)
         rewardState.selectedId = selected and selected.item.id
         if not selected then message = "No matching quest rewards." end
     end
-    window:ShowRewardItems(entries, selected, message, offset)
+    window:ShowRewardItems(entries, selected, message, offset, sourceOffset)
 end
 
-local function updateRewardCategories()
-    if browseIndex and rewardState.useCurrentZone then
-        local zone = browseIndex:MatchZone(C_Map.GetBestMapForUnit("player"))
-        rewardState.category = zone and zone.key
-        rewardState.useCurrentZone = nil
+local function showLocationCatalog(kind)
+    local entries = browseIndex and browseIndex:Categories(kind) or {}
+    local message
+    if not browseIndex then
+        message = browseBuilding and "Loading locations..." or "Quest locations unavailable."
     end
-    local kind = rewardState.kind
-    window:SetRewardCategories(categoryOptions(kind), browsePrompts[kind])
+    window:ShowLocations(kind, entries, message)
 end
 
 local function buildIndex(build, finish)
@@ -397,9 +394,11 @@ local function loadBrowseIndex()
             showBrowse(window:ResultOffset())
         end
         if rewardState then
-            updateRewardCategories()
             showRewardCatalog(window:RewardOffset())
         end
+        local route = window:Route()
+        if route.page == "locations" then showLocationCatalog(route.kind) end
+        window:RefreshNavigation()
         if window:IsActiveChainsOpen() then showActiveChains() end
     end)
 end
@@ -409,13 +408,18 @@ local function openActiveChains()
     showActiveChains()
 end
 
-local function openRewardCatalog()
-    if not rewardState then
-        local kind = browse.kind == "dungeons" and "dungeons" or "zones"
-        local category = browse.kind == kind and browse.category or nil
-        rewardState = { kind = kind, category = category, query = "", useCurrentZone = not category and kind == "zones" }
-        updateRewardCategories()
+local function openRewardCatalog(kind, category)
+    if rewardState then
+        rewardState.offset = window:RewardOffset()
+        rewardState.sourceOffset = window:RewardSourceOffset()
     end
+    local identity = kind .. ":" .. category
+    rewardState = rewardStates[identity]
+    if not rewardState then
+        rewardState = { kind = kind, category = category, query = "", offset = 0, sourceOffset = 0 }
+        rewardStates[identity] = rewardState
+    end
+    window:SetRewardQuery(rewardState.query)
     loadBrowseIndex()
     if not rewardCatalog and not rewardBuilding then
         rewardBuilding = true
@@ -431,7 +435,7 @@ local function openRewardCatalog()
             showRewardCatalog(window:RewardOffset())
         end)
     end
-    showRewardCatalog(window:RewardOffset())
+    showRewardCatalog(rewardState.offset, rewardState.sourceOffset)
 end
 
 local function setBrowseMode(enabled, kind, category)
@@ -440,10 +444,14 @@ local function setBrowseMode(enabled, kind, category)
     else
         searchOffset = window:ResultOffset()
     end
-    if kind and (kind ~= browse.kind or category ~= browse.category) then
-        browse.kind, browse.category, browse.page, browse.offset = kind, category, 1, 0
+    if kind and kind ~= browse.kind then
+        browseStates[browse.kind] = browse
+        browse = browseStates[kind] or { kind = kind, page = 1, offset = 0 }
+        browseStates[kind] = browse
     end
-    if kind and category then browse.lastCategory[kind] = category end
+    if kind and category ~= browse.category then
+        browse.category, browse.page, browse.offset = category, 1, 0
+    end
     browsing = enabled
     window:SetBrowseMode(enabled)
     if not enabled then
@@ -452,36 +460,53 @@ local function setBrowseMode(enabled, kind, category)
     end
     loadBrowseIndex()
     updateBrowseCategories()
+    window:SetCompletedFilter(browse.completedFilter)
     showBrowse(browse.offset)
+end
+
+local function openJournalRoute(route)
+    if route.page == "locations" then
+        loadBrowseIndex()
+        showLocationCatalog(route.kind)
+    elseif route.page == "search" then
+        setBrowseMode(false)
+    elseif route.page == "quests" then
+        setBrowseMode(true, route.kind, route.key)
+    elseif route.page == "rewards" then
+        openRewardCatalog(route.kind, route.key)
+    elseif route.page == "activeChains" then
+        openActiveChains()
+    end
 end
 
 local function getWindow()
     if not window then
         window = ns.Window.New({
-            search = search, openQuest = openQuest, selectStep = selectStep, setBrowseMode = setBrowseMode,
+            search = search, openQuest = openQuest, selectStep = selectStep,
+            openJournalRoute = openJournalRoute,
+            categoryName = function(kind, key)
+                local category = browseIndex and browseIndex:Category(kind, key)
+                return category and category.name
+            end,
+            currentZone = function()
+                return browseIndex and browseIndex:MatchZone(C_Map.GetBestMapForUnit("player"))
+            end,
+            openClassQuests = function()
+                local _, token = UnitClass("player")
+                window:OpenCategory("classes", token)
+            end,
             openLinkedQuest = function(id) openQuest(id, nil, chainCategory) end,
             openBrowseCategory = function(kind, category)
-                setBrowseMode(true, kind, category)
-                window:SetCatalogOpen(true)
+                if category then window:OpenCategory(kind, category) else window:OpenLocations(kind) end
             end,
             questLogStatus = questLogStatus,
             openActiveChains = openActiveChains,
             partyOnQuest = partyOnQuest,
             browseKinds = browseKinds,
-            browseKind = function() return browse.kind end,
             browseCategory = function() return browse.category end,
-            selectBrowseKind = function(key)
-                if browse.kind ~= key then
-                    browse.kind, browse.category, browse.page = key, browse.lastCategory[key], 1
-                    updateBrowseCategories()
-                    showBrowse(0)
-                end
-            end,
             selectBrowseCategory = function(key)
                 if browse.category ~= key then
-                    browse.lastCategory[browse.kind] = key
-                    browse.category, browse.page = key, 1
-                    showBrowse(0)
+                    window:OpenCategory(browse.kind, key)
                 end
             end,
             setCompletedFilter = function(filter)
@@ -494,26 +519,11 @@ local function getWindow()
                 showBrowse(0)
             end,
             rewardPage = {
-                open = openRewardCatalog,
                 openQuest = function(id, destination)
                     openQuest(id, destination, {
                         kind = rewardState.kind,
                         category = browseIndex:Category(rewardState.kind, rewardState.category),
                     })
-                end,
-                kinds = { browseKinds[1], browseKinds[2] },
-                kind = function() return rewardState and rewardState.kind or "zones" end,
-                category = function() return rewardState.category end,
-                selectKind = function(kind)
-                    if rewardState.kind ~= kind then
-                        rewardState.kind, rewardState.category, rewardState.useCurrentZone = kind, nil, nil
-                        updateRewardCategories()
-                        showRewardCatalog(0)
-                    end
-                end,
-                selectCategory = function(key)
-                    rewardState.category = key
-                    showRewardCatalog(0)
                 end,
                 search = function(query)
                     rewardState.query = query
