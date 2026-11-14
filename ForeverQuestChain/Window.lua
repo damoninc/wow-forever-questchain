@@ -84,6 +84,48 @@ local function makeButton(parent, template)
     return button
 end
 
+local function makeLocationButton(parent)
+    -- Reuse the journal's texture regions directly: Forever does not expose
+    -- EncounterInstanceButtonTemplate, but its artwork needs no XML template.
+    local button = CreateFrame("Button", nil, parent)
+    local sheet = "Interface\\EncounterJournal\\UI-EncounterJournalTextures"
+    button:SetNormalTexture(sheet)
+    button:GetNormalTexture():SetTexCoord(0.00195313, 0.34179688, 0.42871094, 0.52246094)
+    button:SetPushedTexture(sheet)
+    button:GetPushedTexture():SetTexCoord(0.00195313, 0.34179688, 0.33300781, 0.42675781)
+    button:SetHighlightTexture(sheet, "ADD")
+    button:GetHighlightTexture():SetTexCoord(0.34570313, 0.68554688, 0.33300781, 0.42675781)
+
+    button.art = button:CreateTexture(nil, "BACKGROUND")
+    button.art:SetAllPoints()
+    button.title = font(button, "QuestTitleFontBlackShadow", colors.accent)
+    button.title:SetPoint("TOPLEFT", 12, -15)
+    button.title:SetPoint("TOPRIGHT", -12, -15)
+    button.title:SetJustifyH("CENTER")
+    button.title:SetWordWrap(true)
+    button.title:SetMaxLines(2)
+    button.title:SetShadowColor(0, 0, 0, 1)
+    button.title:SetShadowOffset(1, -1)
+    button.level = font(button, "GameFontNormalSmall", colors.accent)
+    button.level:SetPoint("BOTTOMLEFT", 9, 9)
+    button.level:SetPoint("BOTTOMRIGHT", -9, 9)
+    button.level:SetShadowColor(0, 0, 0, 1)
+    button.level:SetShadowOffset(1, -1)
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.category.name)
+        GameTooltip:AddLine(self.level:GetText(), 1, 0.82, 0)
+        GameTooltip:AddLine(self.counts, 1, 1, 1)
+        GameTooltip:AddLine("Click to view quests and rewards.", 0.76, 0.73, 0.66)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
+    button:SetScript("OnHide", button:GetScript("OnLeave"))
+    return button
+end
+
 local function makeControl(parent, title, width)
     local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     button:SetSize(width, 24)
@@ -586,12 +628,12 @@ local function createLocationPage(parent, top, width, height, openCategory, curr
         local category = currentZone()
         if category then openCategory("zones", category.key) end
     end)
-    local cards, states, artwork = {}, {}, {}
+    local cards, states, artwork, mapArtwork = {}, {}, {}, {}
     local kind, entries, message, updating
     local render
     local function artFor(category)
-        if kind ~= "dungeons" or type(EJ_GetInstanceByIndex) ~= "function" then return end
-        if not artwork.loaded then
+        if kind ~= "dungeons" then return end
+        if not artwork.loaded and type(EJ_GetInstanceByIndex) == "function" then
             for index = 1, 256 do
                 local id, name, _, _, image = EJ_GetInstanceByIndex(index, false)
                 if not id then break end
@@ -599,16 +641,43 @@ local function createLocationPage(parent, top, width, height, openCategory, curr
             end
             artwork.loaded = true
         end
-        return artwork[category.name:lower()]
+        return artwork[category.name:lower()] or ns.LocationArt.DungeonTexture(category.key)
+    end
+    local function showMapArt(card, category, width, height)
+        if kind ~= "zones" or category.key <= 0 or not C_Map.GetMapArtLayers
+            or not C_Map.GetMapArtLayerTextures then return false end
+        local map = mapArtwork[category.key]
+        if not map then
+            local layers = C_Map.GetMapArtLayers(category.key)
+            local layer = layers and layers[1]
+            if not layer then return false end
+            local textures = C_Map.GetMapArtLayerTextures(category.key, 1)
+            if not textures or #textures == 0 then return false end
+            map = { layer = layer, textures = textures }
+            mapArtwork[category.key] = map
+        end
+        local tiles = ns.LocationArt.Tiles(map.layer, map.textures, width, height)
+        card.mapTiles = card.mapTiles or {}
+        for index, tile in ipairs(tiles) do
+            local texture = card.mapTiles[index] or card:CreateTexture(nil, "BACKGROUND")
+            card.mapTiles[index] = texture
+            texture:ClearAllPoints()
+            texture:SetPoint("TOPLEFT", tile.x, -tile.y)
+            texture:SetSize(tile.width, tile.height)
+            texture:SetTexture(tile.texture)
+            texture:SetTexCoord(0, tile.right, 0, tile.bottom)
+            texture:Show()
+        end
+        return #tiles > 0
     end
     render = function(offset)
         if not kind then return end
         hideAll(cards)
         local state = states[kind]
         local filter, shown = state.query:lower(), 0
-        local columns = math.max(2, math.floor((contentWidth + 12) / 220))
+        local columns = math.max(2, math.floor((contentWidth + 12) / 190))
         local cardWidth = math.floor((contentWidth - (columns - 1) * 12) / columns)
-        local cardHeight = 112
+        local cardHeight = math.floor(cardWidth * 96 / 174 + 0.5)
         for _, category in ipairs(entries) do
             local matchesLevel = not state.mine or not category.minLevel
                 or (UnitLevel("player") >= category.minLevel and UnitLevel("player") <= (category.maxLevel or category.minLevel))
@@ -616,25 +685,7 @@ local function createLocationPage(parent, top, width, height, openCategory, curr
                 shown = shown + 1
                 local card = cards[shown]
                 if not card then
-                    card = makeButton(body, "BackdropTemplate")
-                    card:SetBackdrop(cardEdge)
-                    card:SetBackdropBorderColor(unpack(colors.edge))
-                    card.art = card:CreateTexture(nil, "BACKGROUND", nil, 1)
-                    card.art:SetPoint("TOPLEFT", 2, -2)
-                    card.art:SetPoint("BOTTOMRIGHT", -2, 2)
-                    card.shade = card:CreateTexture(nil, "BORDER")
-                    card.shade:SetColorTexture(0.03, 0.02, 0.01, 0.62)
-                    card.shade:SetAllPoints()
-                    card.title:ClearAllPoints()
-                    card.title:SetPoint("TOPLEFT", 12, -12)
-                    card.title:SetPoint("TOPRIGHT", -12, -12)
-                    card.title:SetWordWrap(true)
-                    card.title:SetMaxLines(2)
-                    card.title:SetFontObject("GameFontNormalLarge")
-                    card.meta:ClearAllPoints()
-                    card.meta:SetPoint("BOTTOMLEFT", 12, 12)
-                    card.meta:SetPoint("BOTTOMRIGHT", -12, 12)
-                    card.meta:SetWordWrap(true)
+                    card = makeLocationButton(body)
                     card:SetScript("OnClick", function(self) openCategory(kind, self.category.key) end)
                     cards[shown] = card
                 end
@@ -645,17 +696,29 @@ local function createLocationPage(parent, top, width, height, openCategory, curr
                 card:SetSize(cardWidth, cardHeight)
                 card.title:SetText(category.name)
                 local image = artFor(category)
-                card.art:SetTexture(image or "Interface\\AchievementFrame\\UI-Achievement-Parchment-Horizontal")
-                local level = category.minLevel and ("Level " .. category.minLevel
+                if card.mapTiles then hideAll(card.mapTiles) end
+                if image and card.art:SetTexture(image) then
+                    -- Journal button images occupy the upper-left 175x95 of
+                    -- a 256x128 texture, as in Blizzard's instance template.
+                    card.art:SetTexCoord(0, 0.68359375, 0, 0.7421875)
+                    card.art:Show()
+                elseif showMapArt(card, category, cardWidth, cardHeight) then
+                    card.art:Hide()
+                else
+                    card.art:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Parchment-Horizontal")
+                    card.art:SetTexCoord(0, 1, 0, 1)
+                    card.art:Show()
+                end
+                local level = category.minLevel and (category.minLevel
                     .. ((category.maxLevel or category.minLevel) > category.minLevel and ("-" .. category.maxLevel) or ""))
                     or "Level unavailable"
                 local chains, quests = 0, 0
                 for _, group in ipairs(category.groups) do
                     if group.standalone then quests = quests + 1 else chains = chains + 1 end
                 end
-                local counts = chains .. (chains == 1 and " chain" or " chains")
+                card.counts = chains .. (chains == 1 and " chain" or " chains")
                     .. "  /  " .. quests .. (quests == 1 and " quest" or " quests")
-                card.meta:SetText(level .. "\n" .. counts)
+                card.level:SetText(level)
                 card:Show()
             end
         end

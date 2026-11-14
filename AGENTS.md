@@ -41,6 +41,7 @@ lua tests/reward-catalog.lua
 lua tests/timeline.lua
 lua tests/browse.lua
 lua tests/journal.lua
+lua tests/location-art.lua
 ```
 
 For changes that affect the game UI or API behavior, also test the affected flow in Forever. Use a linear chain, a fork or join, and an unaccepted quest with visible rewards as relevant. Check that repeated titles remain distinguishable, fast selection changes keep the right details, and quest status refreshes after acceptance or turn-in. Report fixture and live-client verification separately.

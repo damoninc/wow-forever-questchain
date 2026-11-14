@@ -10,6 +10,8 @@ QuestChain is an in-game quest-chain reference for **WoW: Forever**. Look up a q
 
 The journal has four main tabs: **Search**, **Zones**, **Dungeons**, and **Active Chains**. Search by title or quest ID, or choose a location card to explore its **Quests** and **Rewards** sections. Location cards sort by level and offer name and level filters. **Current Zone** opens the quests for your current location.
 
+Location cards use Blizzard's journal borders and title styling. Classic dungeons use the client's journal thumbnails, and zones use the client's map tiles. Locations without available artwork use parchment. Hover a card to see its chain and standalone quest counts.
+
 Opening a quest drills into its timeline within the current tab. **Back** returns to the list or reward sources you came from. Linear steps run down the center of the timeline. Sibling branches sit side by side and reconnect at their shared next step. Hold **Shift** while scrolling to pan wide branches.
 
 Right-click a quest in WoW's Quest Log and choose **Open in QuestChain** to jump to its step. The quest details page also has an **Open in QuestChain** button beside **Back**.
