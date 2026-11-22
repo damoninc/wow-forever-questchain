@@ -1,7 +1,7 @@
 local _, ns = ...
 
-local TimelinePage = {}
-ns.TimelinePage = TimelinePage
+ForeverQuestChainTimelinePageMixin = {}
+local TimelinePage = ForeverQuestChainTimelinePageMixin
 
 local Widgets = ns.Widgets
 local colors = Widgets.colors
@@ -10,47 +10,51 @@ local panelInset = Widgets.panelInset
 local partyLineHeight = Widgets.partyLineHeight
 local font = Widgets.font
 local label = Widgets.label
-local panel = Widgets.panel
-local makeBreadcrumb = Widgets.makeBreadcrumb
 local setBreadcrumbText = Widgets.setBreadcrumbText
-local makeBrowseMenu = Widgets.makeBrowseMenu
-local makeTimelineButton = Widgets.makeTimelineButton
 local hideAll = Widgets.hideAll
 local updateScroll = Widgets.updateScroll
 local resetScroll = Widgets.resetScroll
 local setPartyStatus = Widgets.setPartyStatus
 
-function TimelinePage.New(frame, sideMargin, bodyTop, initialWidth, bodyHeight, callbacks)
-    local chainBody, chainScroll, chainWidth, chainPanel =
-        panel(frame, sideMargin, bodyTop, initialWidth, bodyHeight, "QUEST TIMELINE")
-    chainScroll:SetPoint("TOPLEFT", 10, -106)
-    local chainTitle = label(chainPanel, "GameFontNormalHuge", colors.text, 12, 30, chainWidth, "")
-    chainTitle:SetWordWrap(false)
-    local chainContext = label(chainPanel, "GameFontHighlightSmall", colors.muted, 12, 59, chainWidth, "")
-    local browseCrumb = makeBreadcrumb(chainPanel)
+local cardEdge = { edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
+
+local function makeTimelineButton(parent)
+    local button = CreateFrame("Button", nil, parent, "ForeverQuestChainTimelineCardTemplate")
+    button:SetBackdrop(cardEdge)
+    button.title:SetWordWrap(true)
+    button.title:SetMaxLines(2)
+    button.meta:ClearAllPoints()
+    button.meta:SetPoint("TOPLEFT", 8, -35)
+    Widgets.addPartyStatus(button)
+    return button
+end
+
+function TimelinePage.Initialize(chainPanel, initialWidth, bodyHeight, callbacks)
+    chainPanel:SetSize(initialWidth, bodyHeight)
+    local chainBody, chainScroll, chainWidth =
+        Widgets.bindPanel(chainPanel, initialWidth, "QUEST TIMELINE")
+    local chainTitle, chainContext = chainPanel.ChainTitle, chainPanel.ChainContext
+    chainTitle:SetWidth(chainWidth)
+    chainContext:SetWidth(chainWidth)
+
+    local browseCrumb, kindCrumb, categoryCrumb = chainPanel.BackCrumb, chainPanel.KindCrumb, chainPanel.CategoryCrumb
+    Widgets.bindBreadcrumb(browseCrumb)
+    Widgets.bindBreadcrumb(kindCrumb)
+    Widgets.bindBreadcrumb(categoryCrumb, true)
     setBreadcrumbText(browseCrumb, "Back")
-    browseCrumb:SetPoint("TOPLEFT", 12, -77)
     local kindSeparator = font(chainPanel, "GameFontHighlightSmall", colors.muted)
-    kindSeparator:SetText("›")
+    kindSeparator:SetText("?")
     kindSeparator:SetPoint("LEFT", browseCrumb, "RIGHT", 8, 0)
-    local kindCrumb = makeBreadcrumb(chainPanel)
     kindCrumb:SetPoint("LEFT", kindSeparator, "RIGHT", 8, 0)
     local categorySeparator = font(chainPanel, "GameFontHighlightSmall", colors.muted)
-    categorySeparator:SetText("›")
+    categorySeparator:SetText("?")
     categorySeparator:SetPoint("LEFT", kindCrumb, "RIGHT", 8, 0)
-    local categoryCrumb = makeBreadcrumb(chainPanel, true)
     categoryCrumb:SetPoint("LEFT", categorySeparator, "RIGHT", 8, 0)
-    local earlierWidth = 155
-    local earlierMenu = makeBrowseMenu(chainPanel, 0, 75, earlierWidth)
-    earlierMenu:ClearAllPoints()
-    earlierMenu:SetPoint("TOPRIGHT", -14, -75)
+
+    local earlierMenu, panHint = chainPanel.EarlierQuests, chainPanel.PanHint
+    local earlierWidth = earlierMenu:GetWidth()
+    earlierMenu.Text:SetJustifyH("LEFT")
     earlierMenu:SetDefaultText("Earlier quests")
-    local panHint = font(chainPanel, "GameFontHighlightSmall", colors.muted)
-    panHint:SetPoint("TOPRIGHT", -12, -12)
-    panHint:SetWidth(150)
-    panHint:SetText("Shift+wheel to pan")
-    panHint:SetJustifyH("RIGHT")
-    panHint:Hide()
     local scrollTimeline = chainScroll:GetScript("OnMouseWheel")
     chainScroll:SetScript("OnMouseWheel", function(self, delta)
         local horizontalRange = self:GetHorizontalScrollRange()
@@ -68,7 +72,7 @@ function TimelinePage.New(frame, sideMargin, bodyTop, initialWidth, bodyHeight, 
     resetScroll(chainScroll, chainBody, 32, 0)
 
     browseCrumb:SetScript("OnClick", callbacks.back)
-    local page = { frame = chainPanel }
+    local page = chainPanel
 
     local function showChainNavigation(context, view, layout, selectedId)
         local kind = context and context.kind
@@ -259,6 +263,4 @@ function TimelinePage.New(frame, sideMargin, bodyTop, initialWidth, bodyHeight, 
             updateScroll(chainScroll, offset)
         end
     end
-
-    return page
 end

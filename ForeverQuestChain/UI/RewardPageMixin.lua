@@ -1,7 +1,7 @@
 local _, ns = ...
 
-local RewardPage = {}
-ns.RewardPage = RewardPage
+ForeverQuestChainRewardPageMixin = {}
+local RewardPage = ForeverQuestChainRewardPageMixin
 
 local Widgets = ns.Widgets
 local colors = Widgets.colors
@@ -9,7 +9,6 @@ local itemFallbackIcon = Widgets.itemFallbackIcon
 local panelInset = Widgets.panelInset
 local label = Widgets.label
 local font = Widgets.font
-local panel = Widgets.panel
 local makeButton = Widgets.makeButton
 local hideAll = Widgets.hideAll
 local resetScroll = Widgets.resetScroll
@@ -17,9 +16,7 @@ local updateScroll = Widgets.updateScroll
 local showTooltip = Widgets.showTooltip
 local tryLinkReward = Widgets.tryLinkReward
 
-function RewardPage.New(parent, top, width, height, callbacks)
-    local frame = CreateFrame("Frame", nil, parent, "ForeverQuestChainRewardCatalogTemplate")
-    frame:SetPoint("TOPLEFT", 14, -top)
+function RewardPage.Initialize(frame, width, height, callbacks)
     frame:SetSize(width, height)
     local query, hint = frame.SearchBox, frame.SearchHint
     query:SetScript("OnTextChanged", function(self)
@@ -32,12 +29,13 @@ function RewardPage.New(parent, top, width, height, callbacks)
 
     local filtersHeight, sourcesWidth, gap = 85, 342, 10
     local listPanelWidth = width - sourcesWidth - gap
-    local list, listScroll, listWidth, listPanel, listTitle =
-        panel(frame, 0, filtersHeight, listPanelWidth, height - filtersHeight, "QUEST REWARDS")
-    local sources, sourceScroll, sourceWidth, sourcePanel =
-        panel(frame, listPanelWidth + gap, filtersHeight, sourcesWidth, height - filtersHeight, "REWARD SOURCES")
-    sourcePanel:ClearAllPoints()
-    sourcePanel:SetPoint("TOPRIGHT", 0, -filtersHeight)
+    local listPanel, sourcePanel = frame.RewardItems, frame.RewardSources
+    listPanel:SetSize(listPanelWidth, height - filtersHeight)
+    sourcePanel:SetSize(sourcesWidth, height - filtersHeight)
+    local list, listScroll, listWidth, listTitle =
+        Widgets.bindPanel(listPanel, listPanelWidth, "QUEST REWARDS")
+    local sources, sourceScroll, sourceWidth =
+        Widgets.bindPanel(sourcePanel, sourcesWidth, "REWARD SOURCES")
     local listMessage = label(list, "GameFontHighlightSmall", colors.muted, 2, 4, listWidth - 4, "")
     local sourceTitle = label(sources, "GameFontNormalLarge", colors.accent, 2, 4, sourceWidth - 4, "")
     local sourceMeta = font(sources, "GameFontHighlightSmall", colors.muted)
@@ -45,7 +43,7 @@ function RewardPage.New(parent, top, width, height, callbacks)
     local itemRows, sourceRows = {}, {}
     local selectedId
 
-    local page = { frame = frame }
+    local page = frame
 
     function page:Render(entries, selection, message, offset, restoredSourceOffset)
         hideAll(itemRows)
@@ -149,6 +147,4 @@ function RewardPage.New(parent, top, width, height, callbacks)
     function page:SourceOffset()
         return sourceScroll:GetVerticalScroll()
     end
-
-    return page
 end

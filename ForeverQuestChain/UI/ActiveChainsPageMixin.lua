@@ -1,7 +1,7 @@
 local _, ns = ...
 
-local ActiveChainsPage = {}
-ns.ActiveChainsPage = ActiveChainsPage
+ForeverQuestChainActiveChainsPageMixin = {}
+local ActiveChainsPage = ForeverQuestChainActiveChainsPageMixin
 
 local Widgets = ns.Widgets
 local colors = Widgets.colors
@@ -9,13 +9,14 @@ local statuses = Widgets.statuses
 local updateScroll = Widgets.updateScroll
 local panelInset = Widgets.panelInset
 local label = Widgets.label
-local panel = Widgets.panel
 local makeButton = Widgets.makeButton
 local hideAll = Widgets.hideAll
 local resetScroll = Widgets.resetScroll
 
-function ActiveChainsPage.New(parent, top, width, height, openQuest)
-    local body, scroll, contentWidth, frame, title = panel(parent, 14, top, width, height, "ACTIVE CHAINS")
+function ActiveChainsPage.Initialize(frame, width, height, openQuest)
+    frame:SetSize(width, height)
+    local body, scroll, contentWidth, title =
+        Widgets.bindPanel(frame, width, "ACTIVE CHAINS")
     local rows, headers, collapsed = {}, {}, {}
     local groups, currentMessage, chainCount = {}, nil, 0
     local notice = label(body, "GameFontHighlightSmall", colors.muted, 6, 4, contentWidth - 12, "")
@@ -90,7 +91,7 @@ function ActiveChainsPage.New(parent, top, width, height, openQuest)
         resetScroll(scroll, body, math.max(32, y), offset)
     end
 
-    local page = { frame = frame }
+    local page = frame
 
     function page:Render(entries, message, count)
         groups, currentMessage, chainCount = entries, message, count or 0
@@ -110,6 +111,4 @@ function ActiveChainsPage.New(parent, top, width, height, openQuest)
         end
         updateScroll(scroll, offset)
     end
-
-    return page
 end

@@ -134,7 +134,7 @@ function Controller.New(source)
         end
         view = nextView
         chainCategory = context or categoryForQuest(model:GetQuest(id))
-        window:Show()
+        window:ShowJournal()
         selectStep(id, id)
         return true
     end

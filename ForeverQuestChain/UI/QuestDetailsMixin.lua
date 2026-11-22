@@ -1,7 +1,7 @@
 local _, ns = ...
 
-local QuestDetails = {}
-ns.QuestDetails = QuestDetails
+ForeverQuestChainQuestDetailsMixin = {}
+local QuestDetails = ForeverQuestChainQuestDetailsMixin
 
 local Widgets = ns.Widgets
 local colors = Widgets.colors
@@ -23,10 +23,9 @@ local function questAtlas(parent, layer, atlas)
     return texture
 end
 
-function QuestDetails.New(parent, top, width, height)
-    local frame = CreateFrame("Frame", nil, parent, "ForeverQuestChainQuestDetailsTemplate")
-    frame:SetPoint("TOPRIGHT", -14, -top)
+function QuestDetails.Initialize(frame, width, height, back)
     frame:SetSize(width, height)
+    frame.BackButton:SetScript("OnClick", back)
     local paper = frame.Parchment
     frame.BackButton:SetText(BACK or "Back")
 
@@ -66,7 +65,7 @@ function QuestDetails.New(parent, top, width, height)
     end
     scroll:HookScript("OnSizeChanged", function(self) layoutDetails(self:GetVerticalScroll()) end)
 
-    local page = { frame = frame }
+    local page = frame
 
     function page:Render(quest, rewards, requirement, log)
         local offset = detailId == quest.id and scroll:GetVerticalScroll() or 0
@@ -108,7 +107,7 @@ function QuestDetails.New(parent, top, width, height)
                     button:SetPoint("TOPLEFT", 8, -y)
                     button:SetScript("OnClick", function()
                         if ns.Map.Show(location) then
-                            parent:Hide()
+                            frame:GetParent():Hide()
                         else
                             print("QuestChain: The world map could not open to this location.")
                         end
@@ -232,6 +231,4 @@ function QuestDetails.New(parent, top, width, height)
     function page:Resize(newHeight)
         frame:SetHeight(newHeight)
     end
-
-    return page
 end

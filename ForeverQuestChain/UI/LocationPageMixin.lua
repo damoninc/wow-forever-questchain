@@ -1,35 +1,41 @@
 local _, ns = ...
 
-local LocationPage = {}
-ns.LocationPage = LocationPage
+ForeverQuestChainLocationPageMixin = {}
+local LocationPage = ForeverQuestChainLocationPageMixin
 
 local Widgets = ns.Widgets
 local colors = Widgets.colors
 local panelInset = Widgets.panelInset
 local label = Widgets.label
-local panel = Widgets.panel
-local makeControl = Widgets.makeControl
-local makeBrowseMenu = Widgets.makeBrowseMenu
-local makeLocationButton = Widgets.makeLocationButton
 local hideAll = Widgets.hideAll
 local resetScroll = Widgets.resetScroll
 
-function LocationPage.New(parent, top, width, height, openCategory, currentZone)
-    local body, scroll, contentWidth, frame, title = panel(parent, 14, top, width, height, "DUNGEONS")
-    scroll:SetPoint("TOPLEFT", 10, -78)
-    local query = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-    query:SetPoint("TOPLEFT", 19, -39)
-    query:SetSize(360, 24)
-    query:SetAutoFocus(false)
-    query:SetMaxLetters(100)
+local function makeLocationButton(parent)
+    local button = CreateFrame("Button", nil, parent, "ForeverQuestChainLocationCardTemplate")
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.category.name)
+        GameTooltip:AddLine(self.level:GetText(), 1, 0.82, 0)
+        GameTooltip:AddLine(self.counts, 1, 1, 1)
+        GameTooltip:AddLine("Click to view quests and rewards.", 0.76, 0.73, 0.66)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
+    button:SetScript("OnHide", button:GetScript("OnLeave"))
+    return button
+end
+
+function LocationPage.Initialize(frame, width, height, openCategory, currentZone)
+    frame:SetSize(width, height)
+    local body, scroll, contentWidth, title =
+        Widgets.bindPanel(frame, width, "DUNGEONS")
+    local query, hint, levels = frame.SearchBox, frame.SearchHint, frame.Levels
+    levels.Text:SetJustifyH("LEFT")
     query:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    local hint = label(frame, "GameFontDisableSmall", colors.muted, 23, 45, 330, "Find a location")
-    local levels = makeBrowseMenu(frame, 0, 39, 155)
-    levels:ClearAllPoints()
-    levels:SetPoint("TOPRIGHT", -16, -39)
     local notice = label(body, "GameFontHighlightSmall", colors.muted, 4, 4, contentWidth - 8, "")
-    local current = makeControl(frame, "Current Zone", 114)
-    current:SetPoint("TOPRIGHT", -16, -5)
+    local current = frame.CurrentZone
     current:SetScript("OnClick", function()
         local category = currentZone()
         if category then openCategory("zones", category.key) end
@@ -151,7 +157,7 @@ function LocationPage.New(parent, top, width, height, openCategory, currentZone)
             end)
         end
     end)
-    local page = { frame = frame }
+    local page = frame
 
     function page:Render(nextKind, categories, text)
         kind, entries, message = nextKind, categories, text
@@ -172,5 +178,4 @@ function LocationPage.New(parent, top, width, height, openCategory, currentZone)
         notice:SetWidth(contentWidth - 8)
         render(offset)
     end
-    return page
 end

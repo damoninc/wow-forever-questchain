@@ -1,7 +1,7 @@
 local _, ns = ...
 
-local QuestList = {}
-ns.QuestList = QuestList
+ForeverQuestChainQuestListMixin = {}
+local QuestList = ForeverQuestChainQuestListMixin
 
 local Widgets = ns.Widgets
 local colors = Widgets.colors
@@ -10,10 +10,7 @@ local panelInset = Widgets.panelInset
 local partyLineHeight = Widgets.partyLineHeight
 local font = Widgets.font
 local label = Widgets.label
-local panel = Widgets.panel
 local makeButton = Widgets.makeButton
-local makeControl = Widgets.makeControl
-local makeBrowseMenu = Widgets.makeBrowseMenu
 local setupCategoryMenu = Widgets.setupCategoryMenu
 local addPartyStatus = Widgets.addPartyStatus
 local setPartyStatus = Widgets.setPartyStatus
@@ -21,11 +18,9 @@ local hideAll = Widgets.hideAll
 local updateScroll = Widgets.updateScroll
 local resetScroll = Widgets.resetScroll
 
-function QuestList.New(frame, sideMargin, bodyTop, catalogWidth, bodyHeight, callbacks)
+function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
     local browsing = false
-    local catalog = CreateFrame("Frame", nil, frame, "ForeverQuestChainQuestListTemplate")
     local resultsTop = 85
-    catalog:SetPoint("TOPLEFT", sideMargin, -bodyTop)
     catalog:SetSize(catalogWidth, bodyHeight)
     local catalogTitle, search = catalog.Heading, catalog.SearchBox
     local hint, find = catalog.SearchHint, catalog.Go
@@ -43,7 +38,8 @@ function QuestList.New(frame, sideMargin, bodyTop, catalogWidth, bodyHeight, cal
 
     local classButton = catalog.ClassQuests
     classButton:SetScript("OnClick", function() callbacks.openClassQuests() end)
-    local categoryMenu = makeBrowseMenu(catalog, 12, 48, 310)
+    local categoryMenu = catalog.CategoryMenu
+    categoryMenu.Text:SetJustifyH("LEFT")
     local categoryHint, hideCompleted = catalog.CategoryHint, catalog.HideCompleted
     hideCompleted.Text:SetText("Hide completed")
     hideCompleted.Text:SetTextColor(unpack(colors.muted))
@@ -55,11 +51,11 @@ function QuestList.New(frame, sideMargin, bodyTop, catalogWidth, bodyHeight, cal
     showCompleted:SetScript("OnClick", function()
         callbacks.setCompletedFilter(not completedOnly and "completed" or nil)
     end)
-    categoryMenu:Hide()
 
-    local resultBody, resultScroll, resultWidth, resultPanel, resultTitle =
-        panel(catalog, 0, resultsTop, catalogWidth, bodyHeight - resultsTop, "SEARCH RESULTS")
-    resultScroll:SetPoint("TOPLEFT", 10, -58)
+    local resultPanel = catalog.Results
+    resultPanel:SetSize(catalogWidth, bodyHeight - resultsTop)
+    local resultBody, resultScroll, resultWidth, resultTitle =
+        Widgets.bindPanel(resultPanel, catalogWidth, "SEARCH RESULTS")
     local idX, levelX, zoneX, statusX
     local questHeading = label(resultPanel, "GameFontNormalSmall", colors.muted, 18, 37, 1, "Quest")
     local idHeading = label(resultPanel, "GameFontNormalSmall", colors.muted, 0, 37, 77, "Quest ID")
@@ -75,10 +71,7 @@ function QuestList.New(frame, sideMargin, bodyTop, catalogWidth, bodyHeight, cal
         statusTitle:SetPoint("TOPLEFT", statusX + 10, -37)
     end
     layoutResultHeadings()
-    local nextPage = makeControl(resultPanel, "Next page", 88)
-    nextPage:SetPoint("TOPRIGHT", -25, -5)
-    local previousPage = makeControl(resultPanel, "Previous page", 101)
-    previousPage:SetPoint("TOPRIGHT", -214, -5)
+    local nextPage, previousPage = resultPanel.NextPage, resultPanel.PreviousPage
     local pageText = font(resultPanel, "GameFontHighlightSmall", colors.muted)
     pageText:SetPoint("RIGHT", nextPage, "LEFT", -4, 0)
     pageText:SetWidth(93)
@@ -102,7 +95,7 @@ function QuestList.New(frame, sideMargin, bodyTop, catalogWidth, bodyHeight, cal
         "Search by name or quest ID.")
     resetScroll(resultScroll, resultBody, 32, 0)
 
-    local page = { frame = catalog }
+    local page = catalog
 
     function page:SetBrowseMode(enabled, kind)
         browsing = enabled
@@ -232,7 +225,7 @@ function QuestList.New(frame, sideMargin, bodyTop, catalogWidth, bodyHeight, cal
         resetScroll(resultScroll, resultBody, y, offset)
     end
 
-    function page:SetShown(shown, scoped)
+    function page:UpdateVisibility(shown, scoped)
         catalog:SetShown(shown)
         catalogTitle:SetShown(not scoped)
         classButton:SetShown(not scoped)
@@ -249,6 +242,4 @@ function QuestList.New(frame, sideMargin, bodyTop, catalogWidth, bodyHeight, cal
     function page:Offset()
         return resultScroll:GetVerticalScroll()
     end
-
-    return page
 end

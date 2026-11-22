@@ -1,9 +1,28 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-    <Frame name="ForeverQuestChainWindowTemplate" inherits="PortraitFrameTemplate" virtual="true"
+    <Frame name="ForeverQuestChainWindowTemplate" inherits="PortraitFrameTemplate"
+           mixin="ForeverQuestChainWindowMixin" virtual="true"
            hidden="true" movable="true" resizable="true" clampedToScreen="true" enableMouse="true" frameStrata="DIALOG">
         <Size x="1000" y="622"/>
         <Anchors><Anchor point="CENTER"/></Anchors>
         <Frames>
+            <Frame parentKey="questList" inherits="ForeverQuestChainQuestListTemplate">
+                <Anchors><Anchor point="TOPLEFT" x="14" y="-56"/></Anchors>
+            </Frame>
+            <Frame parentKey="rewards" inherits="ForeverQuestChainRewardPageTemplate">
+                <Anchors><Anchor point="TOPLEFT" x="14" y="-56"/></Anchors>
+            </Frame>
+            <Frame parentKey="questDetails" inherits="ForeverQuestChainQuestDetailsTemplate">
+                <Anchors><Anchor point="TOPRIGHT" x="-14" y="-56"/></Anchors>
+            </Frame>
+            <Frame parentKey="timeline" inherits="ForeverQuestChainTimelinePageTemplate">
+                <Anchors><Anchor point="TOPLEFT" x="14" y="-56"/></Anchors>
+            </Frame>
+            <Frame parentKey="locations" inherits="ForeverQuestChainLocationPageTemplate">
+                <Anchors><Anchor point="TOPLEFT" x="14" y="-56"/></Anchors>
+            </Frame>
+            <Frame parentKey="activeChains" inherits="ForeverQuestChainActiveChainsPageTemplate">
+                <Anchors><Anchor point="TOPLEFT" x="14" y="-56"/></Anchors>
+            </Frame>
             <Frame parentKey="DragHeader" enableMouse="true">
                 <Size y="21"/>
                 <Anchors>

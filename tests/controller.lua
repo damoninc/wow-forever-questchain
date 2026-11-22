@@ -46,7 +46,7 @@ end }
 ns.Window = { New = function(actions)
     callbacks = actions
     return {
-        Show = noop,
+        ShowJournal = noop,
         OpenQuestPage = noop,
         IsActiveChainsOpen = noop,
         timeline = { Render = function(_, _, _, progress) statuses = progress end },

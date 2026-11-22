@@ -1,0 +1,62 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Button name="ForeverQuestChainTimelineCardTemplate" inherits="ForeverQuestChainRowTemplate,BackdropTemplate" virtual="true">
+        <Layers>
+            <Layer level="ARTWORK">
+                <Texture parentKey="statusMark">
+                    <Size x="3"/>
+                    <Anchors>
+                        <Anchor point="TOPLEFT"/>
+                        <Anchor point="BOTTOMLEFT"/>
+                    </Anchors>
+                </Texture>
+            </Layer>
+            <Layer level="OVERLAY">
+                <FontString parentKey="note" inherits="GameFontHighlightSmall" justifyH="LEFT" justifyV="TOP" wordwrap="false">
+                    <Anchors><Anchor point="TOPLEFT" x="8" y="-49"/></Anchors>
+                    <Color r="0.76" g="0.73" b="0.66"/>
+                </FontString>
+                <FontString parentKey="partyStatus" inherits="GameFontHighlightSmall" justifyH="LEFT" justifyV="TOP">
+                    <Size x="96"/>
+                    <Anchors><Anchor point="TOPLEFT" x="8" y="-63"/></Anchors>
+                    <Color r="0.55" g="0.82" b="1"/>
+                </FontString>
+            </Layer>
+        </Layers>
+    </Button>
+
+    <Frame name="ForeverQuestChainTimelinePageTemplate" inherits="ForeverQuestChainListPanelTemplate"
+           mixin="ForeverQuestChainTimelinePageMixin" virtual="true">
+        <KeyValues>
+            <KeyValue key="listTop" value="106" type="number"/>
+        </KeyValues>
+        <Layers>
+            <Layer level="OVERLAY">
+                <FontString parentKey="ChainTitle" inherits="GameFontNormalHuge" justifyH="LEFT" justifyV="TOP" wordwrap="false">
+                    <Anchors><Anchor point="TOPLEFT" x="12" y="-30"/></Anchors>
+                    <Color r="1" g="1" b="1"/>
+                </FontString>
+                <FontString parentKey="ChainContext" inherits="GameFontHighlightSmall" justifyH="LEFT" justifyV="TOP">
+                    <Anchors><Anchor point="TOPLEFT" x="12" y="-59"/></Anchors>
+                    <Color r="0.76" g="0.73" b="0.66"/>
+                </FontString>
+                <FontString parentKey="PanHint" inherits="GameFontHighlightSmall" justifyH="RIGHT" justifyV="TOP"
+                            text="Shift+wheel to pan" hidden="true">
+                    <Size x="150"/>
+                    <Anchors><Anchor point="TOPRIGHT" x="-12" y="-12"/></Anchors>
+                    <Color r="0.76" g="0.73" b="0.66"/>
+                </FontString>
+            </Layer>
+        </Layers>
+        <Frames>
+            <Button parentKey="BackCrumb" inherits="ForeverQuestChainBreadcrumbTemplate">
+                <Anchors><Anchor point="TOPLEFT" x="12" y="-77"/></Anchors>
+            </Button>
+            <Button parentKey="KindCrumb" inherits="ForeverQuestChainBreadcrumbTemplate"/>
+            <Button parentKey="CategoryCrumb" inherits="ForeverQuestChainBreadcrumbTemplate"/>
+            <DropdownButton parentKey="EarlierQuests" inherits="WowStyle1DropdownTemplate">
+                <Size x="155"/>
+                <Anchors><Anchor point="TOPRIGHT" x="-14" y="-75"/></Anchors>
+            </DropdownButton>
+        </Frames>
+    </Frame>
+</Ui>

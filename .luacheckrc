@@ -20,6 +20,10 @@ read_globals = {
 }
 
 globals = {
-    "ForeverQuestChainMapPinMixin", "ForeverQuestChainSettings",
+    "ForeverQuestChainMapPinMixin", "ForeverQuestChainMinimapMixin", "ForeverQuestChainSettings",
+    "ForeverQuestChainWindowMixin", "ForeverQuestChainQuestListMixin",
+    "ForeverQuestChainTimelinePageMixin", "ForeverQuestChainQuestDetailsMixin",
+    "ForeverQuestChainRewardPageMixin", "ForeverQuestChainLocationPageMixin",
+    "ForeverQuestChainActiveChainsPageMixin",
     "SLASH_FOREVERQUESTCHAIN1", "SlashCmdList", "UISpecialFrames",
 }

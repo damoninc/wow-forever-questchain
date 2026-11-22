@@ -1,15 +1,14 @@
 local _, ns = ...
 
-local Window = {}
-ns.Window = Window
+ForeverQuestChainWindowMixin = {}
+local WindowMixin = ForeverQuestChainWindowMixin
 
 local Widgets = ns.Widgets
 
-function Window.New(callbacks)
+function WindowMixin.Initialize(frame, callbacks)
     local minWidth, minHeight = 860, 460
     local bodyTop, bodyBottom, sideMargin, panelGap = 56, 53, 14, 10
     local detailWidth = 312
-    local frame = CreateFrame("Frame", "ForeverQuestChainWindow", UIParent, "ForeverQuestChainWindowTemplate")
     local defaultWidth, defaultHeight = frame:GetSize()
     frame:SetTitle("QuestChain")
     frame:SetPortraitToAsset("Interface\\QuestFrame\\UI-QuestLog-BookIcon")
@@ -33,29 +32,22 @@ function Window.New(callbacks)
     PanelTemplates_SetNumTabs(footer, #footer.Tabs)
 
     local catalogWidth, bodyHeight = defaultWidth - 2 * sideMargin, defaultHeight - bodyTop - bodyBottom
-    local window = {}
+    local window = frame
     local function openCategory(kind, key) window:OpenCategory(kind, key) end
     local function openLocations(kind) window:OpenLocations(kind) end
     local function back() window:Back() end
-    local questList = ns.QuestList.New(frame, sideMargin, bodyTop, catalogWidth, bodyHeight, callbacks)
-    local rewardPage =
-        ns.RewardPage.New(frame, bodyTop, catalogWidth, bodyHeight, callbacks.rewardPage)
-    local locationPage =
-        ns.LocationPage.New(frame, bodyTop, catalogWidth, bodyHeight, openCategory, callbacks.currentZone)
-    local activeChainsPage =
-        ns.ActiveChainsPage.New(frame, bodyTop, catalogWidth, bodyHeight, callbacks.openQuest)
-    local timeline = ns.TimelinePage.New(frame, sideMargin, bodyTop, catalogWidth - detailWidth - panelGap, bodyHeight, {
+    local questList, rewardPage, locationPage = frame.questList, frame.rewards, frame.locations
+    local activeChainsPage, timeline, questDetails = frame.activeChains, frame.timeline, frame.questDetails
+    questList:Initialize(catalogWidth, bodyHeight, callbacks)
+    rewardPage:Initialize(catalogWidth, bodyHeight, callbacks.rewardPage)
+    locationPage:Initialize(catalogWidth, bodyHeight, openCategory, callbacks.currentZone)
+    activeChainsPage:Initialize(catalogWidth, bodyHeight, callbacks.openQuest)
+    timeline:Initialize(catalogWidth - detailWidth - panelGap, bodyHeight, {
         back = back, openLocations = openLocations, browseKinds = callbacks.browseKinds,
         openBrowseCategory = callbacks.openBrowseCategory, selectStep = callbacks.selectStep,
         openLinkedQuest = callbacks.openLinkedQuest, partyOnQuest = callbacks.partyOnQuest,
     })
-    local questDetails = ns.QuestDetails.New(frame, bodyTop, detailWidth, bodyHeight)
-    window.questDetails = questDetails
-    window.questList = questList
-    window.timeline = timeline
-    window.rewards = rewardPage
-    window.locations = locationPage
-    window.activeChains = activeChainsPage
+    questDetails:Initialize(detailWidth, bodyHeight, back)
 
     local journal = ns.Journal.New()
     local tabIndex = { search = 1, zones = 2, dungeons = 3, activeChains = 4 }
@@ -77,12 +69,12 @@ function Window.New(callbacks)
         local page = route.page
         local open, chain = page == "search" or page == "quests", page == "chain"
         local scoped = page == "quests" or page == "rewards"
-        questList:SetShown(open, scoped)
-        timeline.frame:SetShown(chain)
-        questDetails.frame:SetShown(chain)
-        locationPage.frame:SetShown(page == "locations")
-        rewardPage.frame:SetShown(page == "rewards")
-        activeChainsPage.frame:SetShown(page == "activeChains")
+        questList:UpdateVisibility(open, scoped)
+        timeline:SetShown(chain)
+        questDetails:SetShown(chain)
+        locationPage:SetShown(page == "locations")
+        rewardPage:SetShown(page == "rewards")
+        activeChainsPage:SetShown(page == "activeChains")
         locationNav:SetShown(scoped)
         if scoped then
             Widgets.setBreadcrumbText(home, route.kind == "classes" and "Search" or (route.kind == "zones" and "Zones" or "Dungeons"))
@@ -130,7 +122,6 @@ function Window.New(callbacks)
         showPage()
     end
 
-    questDetails.frame.BackButton:SetScript("OnClick", back)
     for index, tab in ipairs({ "search", "zones", "dungeons", "activeChains" }) do
         footer.Tabs[index]:SetScript("OnClick", function()
             if tab == "search" then journal:OpenSearch() else journal:SelectTab(tab) end
@@ -139,7 +130,7 @@ function Window.New(callbacks)
     end
     showPage()
 
-    function window:Show()
+    function window:ShowJournal()
         if not frame:IsShown() then
             local screenWidth, screenHeight = UIParent:GetWidth(), UIParent:GetHeight()
             local scale = math.min(1, screenWidth / (defaultWidth + 20), screenHeight / (defaultHeight + 20))
@@ -164,7 +155,7 @@ function Window.New(callbacks)
             rewardPage:ClearFocus()
             frame:Hide()
         else
-            self:Show()
+            self:ShowJournal()
         end
     end
 
@@ -181,6 +172,12 @@ function Window.New(callbacks)
         activeChainsPage:Resize(catalogWidth, bodyHeight)
         locationPage:Resize(catalogWidth, bodyHeight)
     end)
+end
 
-    return window
+ns.Window = {}
+
+function ns.Window.New(callbacks)
+    local frame = CreateFrame("Frame", "ForeverQuestChainWindow", UIParent, "ForeverQuestChainWindowTemplate")
+    frame:Initialize(callbacks)
+    return frame
 end

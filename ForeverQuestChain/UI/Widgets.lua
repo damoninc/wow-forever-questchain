@@ -23,7 +23,6 @@ local statuses = {
 }
 local itemFallbackIcon = 134400
 local panelInset = 36
-local cardEdge = { edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 }
 
 local function fill(parent, layer, r, g, b, a)
     local texture = parent:CreateTexture(nil, layer)
@@ -48,12 +47,12 @@ local function label(parent, template, color, x, y, width, value)
     return text
 end
 
-local function panel(parent, x, top, width, height, heading)
-    local frame = CreateFrame("Frame", nil, parent, "ForeverQuestChainListPanelTemplate")
-    frame:SetPoint("TOPLEFT", x, -top)
-    frame:SetSize(width, height)
+function Widgets.bindPanel(frame, width, heading)
     local title, scroll = frame.Heading, frame.ListScroll
     title:SetText(heading)
+    if frame.listTop then
+        scroll:SetPoint("TOPLEFT", 10, -frame.listTop)
+    end
     scroll.scrollBarHideable = true
     scroll.ScrollBar:Hide()
     scroll:EnableMouseWheel(true)
@@ -64,40 +63,17 @@ local function panel(parent, x, top, width, height, heading)
     local contentWidth = width - panelInset
     local content = scroll:GetScrollChild()
     content:SetWidth(contentWidth)
-    return content, scroll, contentWidth, frame, title
+    return content, scroll, contentWidth, title
 end
 
 local function makeButton(parent)
     return CreateFrame("Button", nil, parent, "ForeverQuestChainRowTemplate")
 end
 
-local function makeLocationButton(parent)
-    local button = CreateFrame("Button", nil, parent, "ForeverQuestChainLocationCardTemplate")
-    button:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(self.category.name)
-        GameTooltip:AddLine(self.level:GetText(), 1, 0.82, 0)
-        GameTooltip:AddLine(self.counts, 1, 1, 1)
-        GameTooltip:AddLine("Click to view quests and rewards.", 0.76, 0.73, 0.66)
-        GameTooltip:Show()
-    end)
-    button:SetScript("OnLeave", function(self)
-        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
-    end)
-    button:SetScript("OnHide", button:GetScript("OnLeave"))
-    return button
-end
-
 local function makeControl(parent, title, width)
     local button = CreateFrame("Button", nil, parent, "ForeverQuestChainControlTemplate")
     button:SetWidth(width)
     button:SetText(title)
-    return button
-end
-
-local function makeBreadcrumb(parent, current)
-    local button = CreateFrame("Button", nil, parent, "ForeverQuestChainBreadcrumbTemplate")
-    Widgets.bindBreadcrumb(button, current)
     return button
 end
 
@@ -117,14 +93,6 @@ local function setBreadcrumbText(button, title, maxWidth)
     local width = math.max(1, math.min(290, maxWidth or 290, math.ceil(text:GetUnboundedStringWidth())))
     text:SetWidth(width)
     button:SetWidth(width)
-end
-
-local function makeBrowseMenu(parent, x, top, width)
-    local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
-    dropdown:SetPoint("TOPLEFT", x, -top)
-    dropdown:SetWidth(width)
-    dropdown.Text:SetJustifyH("LEFT")
-    return dropdown
 end
 
 local function setupCategoryMenu(dropdown, options, prompt, selected, choose)
@@ -162,17 +130,6 @@ end
 local function setPartyStatus(row, members)
     row.partyNames = members
     row.partyStatus:SetText(members and ("Party: %d"):format(#members) or "")
-end
-
-local function makeTimelineButton(parent)
-    local button = CreateFrame("Button", nil, parent, "ForeverQuestChainTimelineCardTemplate")
-    button:SetBackdrop(cardEdge)
-    button.title:SetWordWrap(true)
-    button.title:SetMaxLines(2)
-    button.meta:ClearAllPoints()
-    button.meta:SetPoint("TOPLEFT", 8, -35)
-    addPartyStatus(button)
-    return button
 end
 
 local function hideAll(list)
@@ -221,17 +178,12 @@ Widgets.partyLineHeight = partyLineHeight
 Widgets.fill = fill
 Widgets.font = font
 Widgets.label = label
-Widgets.panel = panel
 Widgets.makeButton = makeButton
-Widgets.makeLocationButton = makeLocationButton
 Widgets.makeControl = makeControl
-Widgets.makeBreadcrumb = makeBreadcrumb
 Widgets.setBreadcrumbText = setBreadcrumbText
-Widgets.makeBrowseMenu = makeBrowseMenu
 Widgets.setupCategoryMenu = setupCategoryMenu
 Widgets.addPartyStatus = addPartyStatus
 Widgets.setPartyStatus = setPartyStatus
-Widgets.makeTimelineButton = makeTimelineButton
 Widgets.hideAll = hideAll
 Widgets.updateScroll = updateScroll
 Widgets.resetScroll = resetScroll
