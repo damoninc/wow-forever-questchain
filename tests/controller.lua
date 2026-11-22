@@ -56,7 +56,7 @@ ns.Window = { New = function(actions)
     }
 end }
 
-for _, module in ipairs({ "Chain", "Rewards", "ForeverQuests", "QuestLog", "Controller", "Core" }) do
+for _, module in ipairs({ "Chain", "Rewards", "ForeverQuests", "UI/QuestLog/QuestLog", "Controller", "Core" }) do
     assert(loadfile("ForeverQuestChain/" .. module .. ".lua"))("ForeverQuestChain", ns)
 end
 

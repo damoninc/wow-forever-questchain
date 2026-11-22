@@ -21,9 +21,10 @@ class RuntimeTests(unittest.TestCase):
             "RewardPage", "LocationPage", "ActiveChainsPage", "MapPin", "Minimap",
         ):
             with self.subTest(component=component):
-                template = f"UI/{component}.xml"
-                mixin = f"UI/{component}Mixin.lua"
-                self.assertIn(template, manifest)
+                templates = [path for path in manifest if Path(path).name == f"{component}.xml"]
+                self.assertEqual(len(templates), 1)
+                template = templates[0]
+                mixin = Path(template).with_name(f"{component}Mixin.lua").as_posix()
                 self.assertIn(mixin, manifest)
                 self.assertLess(manifest.index(mixin), manifest.index(template))
                 root = ElementTree.parse(ADDON / template).getroot()
