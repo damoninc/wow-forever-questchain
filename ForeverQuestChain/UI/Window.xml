@@ -1,0 +1,66 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Frame name="ForeverQuestChainWindowTemplate" inherits="PortraitFrameTemplate" virtual="true"
+           hidden="true" movable="true" resizable="true" clampedToScreen="true" enableMouse="true" frameStrata="DIALOG">
+        <Size x="1000" y="622"/>
+        <Anchors><Anchor point="CENTER"/></Anchors>
+        <Frames>
+            <Frame parentKey="DragHeader" enableMouse="true">
+                <Size y="21"/>
+                <Anchors>
+                    <Anchor point="TOPLEFT" x="60" y="-1"/>
+                    <Anchor point="TOPRIGHT" x="-28" y="-1"/>
+                </Anchors>
+            </Frame>
+            <Button parentKey="ResizeGrip">
+                <Size x="20" y="20"/>
+                <Anchors><Anchor point="BOTTOMRIGHT" x="-5" y="5"/></Anchors>
+                <NormalTexture file="Interface\ChatFrame\UI-ChatIM-SizeGrabber-Up"/>
+                <HighlightTexture file="Interface\ChatFrame\UI-ChatIM-SizeGrabber-Highlight"/>
+                <PushedTexture file="Interface\ChatFrame\UI-ChatIM-SizeGrabber-Down"/>
+            </Button>
+            <Frame parentKey="JournalTabs">
+                <Size y="42"/>
+                <Anchors>
+                    <Anchor point="BOTTOMLEFT" x="1" y="1"/>
+                    <Anchor point="BOTTOMRIGHT" x="-1" y="1"/>
+                </Anchors>
+                <Frames>
+                    <Button parentKey="Search" inherits="PanelTabButtonTemplate" text="Search">
+                        <Anchors><Anchor point="TOPLEFT" x="13" y="-2"/></Anchors>
+                    </Button>
+                    <Button parentKey="Zones" inherits="PanelTabButtonTemplate" text="Zones"/>
+                    <Button parentKey="Dungeons" inherits="PanelTabButtonTemplate" text="Dungeons"/>
+                    <Button parentKey="ActiveChains" inherits="PanelTabButtonTemplate" text="Active Chains"/>
+                </Frames>
+            </Frame>
+            <Frame parentKey="LocationNav">
+                <Size y="26"/>
+                <Anchors>
+                    <Anchor point="TOPLEFT" x="26" y="-64"/>
+                    <Anchor point="TOPRIGHT" x="-26" y="-64"/>
+                </Anchors>
+                <Layers>
+                    <Layer level="OVERLAY">
+                        <FontString parentKey="Heading" inherits="GameFontNormalLarge" justifyH="LEFT" justifyV="TOP" wordwrap="false">
+                            <Anchors><Anchor point="RIGHT" x="-236"/></Anchors>
+                            <Color r="1" g="0.82" b="0"/>
+                        </FontString>
+                    </Layer>
+                </Layers>
+                <Frames>
+                    <Button parentKey="Home" inherits="ForeverQuestChainBreadcrumbTemplate">
+                        <Anchors><Anchor point="LEFT"/></Anchors>
+                    </Button>
+                    <Button parentKey="Quests" inherits="ForeverQuestChainControlTemplate" text="Quests">
+                        <Size x="104" y="24"/>
+                        <Anchors><Anchor point="RIGHT" x="-112"/></Anchors>
+                    </Button>
+                    <Button parentKey="Rewards" inherits="ForeverQuestChainControlTemplate" text="Rewards">
+                        <Size x="104" y="24"/>
+                        <Anchors><Anchor point="RIGHT"/></Anchors>
+                    </Button>
+                </Frames>
+            </Frame>
+        </Frames>
+    </Frame>
+</Ui>

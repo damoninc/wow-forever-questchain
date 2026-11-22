@@ -69,11 +69,12 @@ class PackageTests(unittest.TestCase):
             self.assertNotIn("@project-version@", toc)
             for line in toc.splitlines():
                 if line.strip() and not line.startswith("#"):
-                    self.assertIn("ForeverQuestChain/" + line.strip(), names)
+                    self.assertIn("ForeverQuestChain/" + line.strip().replace("\\", "/"), names)
             for name in names:
                 self.assertFalse(any(f"/{folder}/" in name for folder in (
-                    "tests", "tools", "types", "docs", ".github", ".vscode", "ForeverQuestChain",
+                    "tests", "tools", "types", "docs", ".github", ".vscode", ".rocks", "ForeverQuestChain",
                 )), name)
+                self.assertFalse(name.endswith((".rockspec", ".luacheckrc")), name)
             self.assertTrue(any("CHANGELOG" in name for name in names))
 
     def test_stable_package_preserves_merged_source(self):

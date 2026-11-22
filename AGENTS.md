@@ -22,28 +22,27 @@ Keep the path from search to an answer short. Prioritize a readable timeline, ac
 ## Code and data
 
 - The display name is **QuestChain** and the addon directory is `ForeverQuestChain`. Target the Forever client with Lua 5.1-compatible code. The TOC currently targets interface `16001` and controls the runtime load order.
-- `QuestData.lua` reads the public `LibQuestieDB` contract for quest records and relationships. QuestieDB is required. The full Questie addon is optional. `Core.lua` wires the client APIs, events, and slash command.
+- Prefer WoW XML templates for static frame hierarchies, named child regions, styling, and fixed anchors. Use namespaced virtual templates for reusable widgets. Lua binds behavior and data, creates pooled instances, and computes layouts that depend on content or viewport size. Load each template before its consumers in the TOC and verify changes in Forever.
+- Keep LuaRocks dependencies in the development toolchain. Declare in-game addon dependencies in the TOC and release metadata.
+- `QuestData.lua` reads the public `LibQuestieDB` contract for quest records and relationships. QuestieDB is required. The full Questie addon is optional. `ForeverQuests.lua` adapts the client’s quest APIs, `QuestLog.lua` adds the Blizzard quest-log entry points, and `Core.lua` wires startup, events, and the slash command to `Controller.lua`.
 - Treat upstream databases and the Forever client as the sources of truth for game data. Do not add hardcoded fallback data or local overrides for missing records, quest links, restrictions, or rewards. Keep gaps visible as missing or unavailable until the source supplies the data.
 - `Chain.lua` builds the bounded quest graph and interprets prerequisites. Keep sequence links, optional lead-ins, and alternatives distinct. Show a blocker only when supported by explicit requirements and current-character state. Keep partial and cyclic data navigable.
 - `Browse.lua` builds the category index on demand. Keep structural chain identities stable, and avoid merging chains that share optional links.
 - `Rewards.lua` manages asynchronous reward requests and caching. Read rewards and progress from Forever. Match replies to quest IDs so a late response cannot replace the selected quest's details.
 - `RewardCatalog.lua` indexes QuestieDB item-to-quest links on demand and keeps all matching source quests per item. Dungeon reward results use quests assigned to the selected dungeon. The Chain details page continues to distinguish guaranteed items and choices using client reward data.
-- `Timeline.lua` computes the layout independently of the game UI. `Window.lua` renders native frames and handles interaction. Browser mockups use sample data and help compare designs. Verify shipped behavior in Forever.
+- `Timeline.lua` computes the layout independently of the game UI. `Window.lua` owns the journal shell and routes. The `UI/` page modules render native frames from XML templates and bind page-specific interactions. Verify shipped behavior in Forever.
 
 ## Verification
 
-Run the Lua 5.1-compatible fixture suites from the repository root.
+Do not take control of or capture the user's screen. The user runs the in-game verification.
+
+From the repository root, run the Lua 5.1 fixtures and syntax check, then verify the TOC and XML load order.
 
 ```text
-lua tests/chain.lua
-lua tests/rewards.lua
-lua tests/reward-catalog.lua
-lua tests/timeline.lua
-lua tests/browse.lua
-lua tests/journal.lua
-lua tests/location-art.lua
+python tools/check-lua.py
+python tests/runtime.py
 ```
 
-For changes that affect the game UI or API behavior, also test the affected flow in Forever. Use a linear chain, a fork or join, and an unaccepted quest with visible rewards as relevant. Check that repeated titles remain distinguishable, fast selection changes keep the right details, and quest status refreshes after acceptance or turn-in. Report fixture and live-client verification separately.
+For changes that affect the game UI or API behavior, include the affected flows in the manual Forever test. Use a linear chain, a fork or join, and an unaccepted quest with visible rewards as relevant. Check that repeated titles remain distinguishable, fast selection changes keep the right details, and quest status refreshes after acceptance or turn-in. Report fixture and live-client verification separately.
 
 For local playtesting, deploy the affected runtime files under `_forever_/Interface/AddOns/ForeverQuestChain` and run `/reload`, then `/questchain`. Preserve unrelated addons and game settings. Keep editor definitions and test fixtures outside the runtime folder.

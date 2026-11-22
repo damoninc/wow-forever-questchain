@@ -46,7 +46,21 @@ Select a step to see its objectives, prerequisites, pickup and turn-in informati
 - Compare the panel with Blizzard's quest offer for a quest that awards coin or choice items. Switch quests quickly and verify that the reward details follow your selection.
 - Accept or turn in a quest in the displayed chain and check that its status changes.
 
-Run the Lua 5.1 fixtures in `tests/` from the repository root. See [AGENTS.md](AGENTS.md) for the product goals and development guide.
+## Develop locally
+
+Run the development commands from the repository root with Lua 5.1, LuaRocks, and Python 3. On Windows, the commands below also work in WSL. LuaRocks needs Lua 5.1 headers and a C compiler to build Luacheck’s LuaFileSystem dependency when a binary rock is unavailable.
+
+```sh
+luarocks --lua-version=5.1 --tree=.rocks make --only-deps
+.rocks/bin/luacheck ForeverQuestChain
+python3 tools/check-lua.py
+python3 tests/runtime.py
+python3 tests/release.py
+```
+
+Use `--lua /path/to/lua` to select a specific Lua 5.1 interpreter for `tools/check-lua.py`. On native Windows, use `python` and run the Luacheck wrapper from `..rocksin`.
+
+The rockspec pins Luacheck for development. The game loads Lua and XML in TOC order, and players install QuestieDB as an addon. See [AGENTS.md](AGENTS.md) for the XML template standard and manual playtest workflow.
 
 ## Publishing
 
