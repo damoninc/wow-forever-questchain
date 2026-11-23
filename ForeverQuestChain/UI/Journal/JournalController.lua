@@ -264,6 +264,7 @@ function JournalController.New(dependencies)
             else
                 print("QuestChain Browse: " .. tostring(result))
             end
+            if not window then return end
             if browsing then
                 updateBrowseCategories()
                 showBrowse(window.questList:Offset())
@@ -418,6 +419,10 @@ function JournalController.New(dependencies)
     end
 
     local controller = {}
+
+    function controller:OnLogin()
+        loadBrowseIndex()
+    end
 
     function controller:Toggle()
         getWindow():Toggle()
