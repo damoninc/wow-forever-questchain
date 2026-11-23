@@ -21,6 +21,6 @@
                 </Texture>
             </Layer>
         </Layers>
-        <HighlightTexture file="Interface\Minimap\UI-Minimap-ZoomButton-Highlight"/>
+        <HighlightTexture file="Interface\Minimap\UI-Minimap-ZoomButton-Highlight" alphaMode="ADD"/>
     </Button>
 </Ui>
