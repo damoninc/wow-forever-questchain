@@ -180,7 +180,7 @@ function JournalController.New(dependencies)
             message = "Pick a category to see its quests and chains."
         else
             local filter = browse.completedFilter
-            local rows = browseIndex:Rows(browse.kind, browse.category, filter, questLogStatus)
+            local rows = browseIndex:Rows(browse.kind, browse.category, filter, questLogStatus, browse.showOutliers)
             local page
             page, pageNumber, pageCount = LocationQuestCatalog.Page(rows, browse.page)
             browse.page = pageNumber
@@ -195,7 +195,7 @@ function JournalController.New(dependencies)
                     or ("Chain  /  %d/%d complete"):format(row.completed, #group.steps)
                 entries[#entries + 1] = {
                     title = group.title, id = group.standalone and quest.id or nil,
-                    level = group.level, detail = detail, logStatus = row.status,
+                    level = row.level, detail = detail, logStatus = row.status,
                     action = function()
                         openQuest(quest.id, step.destination, {
                             kind = browse.kind, category = browseIndex:Category(browse.kind, browse.category),
@@ -336,6 +336,7 @@ function JournalController.New(dependencies)
         loadBrowseIndex()
         updateBrowseCategories()
         window.questList:SetCompletedFilter(browse.completedFilter)
+        window.questList:SetShowOutliers(browse.showOutliers)
         showBrowse(browse.offset)
     end
 
@@ -388,6 +389,10 @@ function JournalController.New(dependencies)
                 setCompletedFilter = function(filter)
                     browse.completedFilter, browse.page = filter, 1
                     window.questList:SetCompletedFilter(filter)
+                    showBrowse(0)
+                end,
+                setShowOutliers = function(shown)
+                    browse.showOutliers, browse.page = shown, 1
                     showBrowse(0)
                 end,
                 browsePage = function(step)

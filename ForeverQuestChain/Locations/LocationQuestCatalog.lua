@@ -12,7 +12,7 @@ local QuestRequirements = ns.QuestRequirements
 
 local unknownZone = { key = 0, name = "Unknown pickup zone" }
 
-local function dungeonLevelRange(levels)
+local function typicalLevelRange(levels)
     table.sort(levels)
     local first, last = 1, #levels
     if last >= 8 then
@@ -25,6 +25,10 @@ local function dungeonLevelRange(levels)
         while levels[last] > upper + padding do last = last - 1 end
     end
     return levels[first], levels[last]
+end
+
+local function belongsToLocation(kind, key, step)
+    return kind ~= "dungeons" or (step.dungeon and step.dungeon.key == key)
 end
 
 local function rootOf(nodes, id)
@@ -150,7 +154,7 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
     table.sort(ids)
     local nodes = groupQuests(questIndex, quests, neighbors, ids)
     local byKind = { zones = {}, dungeons = {}, classes = {} }
-    local steps, dungeonLevels = {}, {}
+    local steps, levelsByKind = {}, { zones = {}, dungeons = {} }
     local function add(kind, category, step, chain)
         local index = byKind[kind]
         local bucket = index[category.key]
@@ -158,7 +162,6 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
             bucket = { key = category.key, name = category.name, byGroup = {}, groups = {} }
             if category.mapId then
                 bucket.minLevel, bucket.maxLevel = mapMetadata:GetLevelRange(category.mapId)
-                bucket.hasMapLevels = bucket.minLevel ~= nil
             end
             index[category.key] = bucket
         end
@@ -170,16 +173,13 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
         end
         group.steps[#group.steps + 1] = step
         local level = step.quest.level
-        local belongs = kind ~= "dungeons" or (step.dungeon and step.dungeon.key == category.key)
-        if level and belongs then
+        if level and belongsToLocation(kind, category.key, step) then
             group.level = math.min(group.level or level, level)
-            if kind == "dungeons" and not bucket.hasMapLevels then
-                local levels = dungeonLevels[category.key] or {}
-                dungeonLevels[category.key] = levels
+            local samples = levelsByKind[kind]
+            if samples and (kind ~= "zones" or bucket.key ~= unknownZone.key) then
+                local levels = samples[category.key] or {}
+                samples[category.key] = levels
                 levels[#levels + 1] = level
-            elseif kind == "zones" and bucket.key ~= unknownZone.key and not bucket.hasMapLevels then
-                bucket.minLevel = math.min(bucket.minLevel or level, level)
-                bucket.maxLevel = math.max(bucket.maxLevel or level, level)
             end
         end
     end
@@ -215,9 +215,15 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
         end
         if yieldWork and index % 80 == 0 then yieldWork() end
     end
-    for key, levels in pairs(dungeonLevels) do
-        local bucket = byKind.dungeons[key]
-        bucket.minLevel, bucket.maxLevel = dungeonLevelRange(levels)
+    for kind, samples in pairs(levelsByKind) do
+        for key, levels in pairs(samples) do
+            local bucket = byKind[kind][key]
+            local low, high = typicalLevelRange(levels)
+            if low ~= levels[1] or high ~= levels[#levels] then
+                bucket.typicalMinLevel, bucket.typicalMaxLevel = low, high
+            end
+            if not bucket.minLevel then bucket.minLevel, bucket.maxLevel = low, high end
+        end
     end
     return setmetatable({ byKind = byKind, mapMetadata = mapMetadata, steps = steps }, LocationQuestCatalog)
 end
@@ -243,18 +249,20 @@ function LocationQuestCatalog:Category(kind, key)
     return self.byKind[kind][key]
 end
 
+local function groupByLevel(a, b, aLevel, bLevel)
+    aLevel, bLevel = aLevel or math.huge, bLevel or math.huge
+    if aLevel ~= bLevel then return aLevel < bLevel end
+    local left, right = a.title:lower(), b.title:lower()
+    if left == right then return a.key < b.key end
+    return left < right
+end
+
 function LocationQuestCatalog:Groups(kind, key)
     local category = self:Category(kind, key)
     if not category then return {} end
     if not category.sorted then
         table.sort(category.groups, function(a, b)
-            local aLevel, bLevel = a.level or math.huge, b.level or math.huge
-            if aLevel ~= bLevel then
-                return aLevel < bLevel
-            end
-            local left, right = a.title:lower(), b.title:lower()
-            if left == right then return a.key < b.key end
-            return left < right
+            return groupByLevel(a, b, a.level, b.level)
         end)
         for _, group in ipairs(category.groups) do
             table.sort(group.steps, function(a, b)
@@ -275,8 +283,12 @@ function LocationQuestCatalog:GetStep(questId)
     return self.steps[questId]
 end
 
-function LocationQuestCatalog:Rows(kind, key, filter, getStatus)
+function LocationQuestCatalog:Rows(kind, key, filter, getStatus, showOutliers)
     local rows, standalone = {}, {}
+    local category = self:Category(kind, key)
+    if not category then return rows end
+    local low = not showOutliers and category.typicalMinLevel
+    local high = category.typicalMaxLevel
     local statuses = {}
     local function statusOf(id)
         if not statuses[id] then statuses[id] = getStatus(id) or "unstarted" end
@@ -288,25 +300,42 @@ function LocationQuestCatalog:Rows(kind, key, filter, getStatus)
             chainStatus = QuestProgress.ChainStatus(group.chain, statusOf)
         end
         local selected, selectedStatus, priority = nil, nil, 0
+        local firstVisible, visibleLevel
         local completed = 0
         for _, step in ipairs(group.steps) do
             local status = statusOf(step.quest.id)
             local done = status == "completed"
             if done then completed = completed + 1 end
-            local matches = not filter or (filter == "completed" and done) or (filter == "incomplete" and not done)
-            local rank = chainStatus == "completed" and done and math.huge or selectionPriority[status]
-            if matches and (rank > priority or (done and rank == priority)) then
-                selected, selectedStatus, priority = step, status, rank
+            local level = step.quest.level
+            local hasLocalLevel = level and belongsToLocation(kind, key, step)
+            if not (low and hasLocalLevel and (level < low or level > high)) then
+                firstVisible = firstVisible or step
+                if hasLocalLevel then visibleLevel = math.min(visibleLevel or level, level) end
+                local matches = not filter or (filter == "completed" and done) or (filter == "incomplete" and not done)
+                local rank = chainStatus == "completed" and done and math.huge or selectionPriority[status]
+                if matches and (rank > priority or (done and rank == priority)) then
+                    selected, selectedStatus, priority = step, status, rank
+                end
             end
         end
         if chainStatus == "completed" then
             -- A completed chain can have only skipped steps in this category.
-            selected = filter ~= "incomplete" and (selected or group.steps[1]) or nil
+            selected = filter ~= "incomplete" and (selected or firstVisible) or nil
         end
         if selected then
             local list = group.standalone and standalone or rows
-            list[#list + 1] = { group = group, step = selected, status = chainStatus or selectedStatus, completed = completed }
+            list[#list + 1] = {
+                group = group, step = selected, level = visibleLevel,
+                status = chainStatus or selectedStatus, completed = completed,
+            }
         end
+    end
+    if low then
+        local function rowByLevel(a, b)
+            return groupByLevel(a.group, b.group, a.level, b.level)
+        end
+        table.sort(rows, rowByLevel)
+        table.sort(standalone, rowByLevel)
     end
     for _, row in ipairs(standalone) do rows[#rows + 1] = row end
     return rows

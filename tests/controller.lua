@@ -1,6 +1,7 @@
 local ns = {}
 local handlers, registered, requests = {}, {}, {}
 local onEvent, callbacks, details, statuses, results
+local runTimers, showOutliers
 local completed = {}
 local function noop() end
 local quests = {
@@ -9,7 +10,7 @@ local quests = {
 }
 
 SlashCmdList = {}
-C_Timer = { After = noop }
+C_Timer = { After = function(_, callback) if runTimers then callback() end end }
 C_QuestLog = {
     IsOnQuest = noop,
     ReadyForTurnIn = noop,
@@ -52,7 +53,17 @@ ns.Window = { New = function(actions)
         ShowJournal = noop,
         OpenQuestPage = noop,
         IsActiveChainsOpen = noop,
-        questList = { ShowResults = function(_, questsFound) results = questsFound end, Offset = noop },
+        Route = function() return { page = "quests" } end,
+        RefreshNavigation = noop,
+        questList = {
+            ShowResults = function(_, questsFound) results = questsFound end,
+            Offset = function() return 0 end,
+            SetBrowseMode = noop,
+            SetBrowseCategories = noop,
+            SetCompletedFilter = noop,
+            SetShowOutliers = function(_, shown) showOutliers = shown == true end,
+            ShowBrowse = noop,
+        },
         timeline = { Render = function(_, _, _, progress) statuses = progress end },
         questDetails = { Render = function(_, quest, rewards, requirements)
             details = { id = quest.id, xp = rewards.xp, requirements = requirements }
@@ -101,3 +112,14 @@ assert(statuses[12].status == "completed" and requests[3] == 12)
 callbacks.search("11")
 assert(#results == 1 and results[1].id == 11)
 assert(details.id == 11 and details.xp.value == 110)
+
+runTimers = true
+local zoneRoute = { page = "quests", kind = "zones", key = 0 }
+local dungeonRoute = { page = "quests", kind = "dungeons", key = 1584 }
+callbacks.openJournalRoute(zoneRoute)
+assert(not showOutliers, "Outliers are hidden when first opening zone quests")
+callbacks.setShowOutliers(true)
+callbacks.openJournalRoute(dungeonRoute)
+assert(not showOutliers, "The zone toggle should not change the dungeon toggle")
+callbacks.openJournalRoute(zoneRoute)
+assert(showOutliers, "Return to the zone with its outlier preference intact")

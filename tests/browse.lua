@@ -383,7 +383,11 @@ local rangeCatalog = ns.LocationQuestCatalog.Build({
     Catalog = function() return rangeQuests, rangeNeighbors end,
 }, {
     GetDungeon = function(_, id) return dungeonByQuest[id] end,
-    GetPickupZones = function() return { { key = 100, name = "Pickup Zone" } } end,
+    GetPickupZones = function(_, id)
+        local dungeon = dungeonByQuest[id]
+        if not dungeon then return { { key = 100, name = "Preparation Zone" } } end
+        return { { key = 100 + dungeon.key, name = dungeon.name .. " Zone", mapId = dungeon.mapId } }
+    end,
     GetClassCategories = function() return {} end,
 }, {
     GetLevelRange = function(_, id) if id == 3 then return 40, 61 end end,
@@ -398,6 +402,24 @@ local clientRange = rangeCatalog:Category("dungeons", 3)
 assert(clientRange.minLevel == 40 and clientRange.maxLevel == 61, "Prefer the client map range")
 local tight = rangeCatalog:Category("dungeons", 4)
 assert(tight.minLevel == 50 and tight.maxLevel == 60, "Remove a high outlier while keeping nearby uncommon levels")
-local pickup = rangeCatalog:Category("zones", 100)
-assert(pickup.minLevel == 1 and pickup.maxLevel == 99, "Zone fallback levels keep their full range")
+local pickup = rangeCatalog:Category("zones", 101)
+assert(pickup.minLevel == 52 and pickup.maxLevel == 60, "Zone fallback ranges reject the same outliers as dungeons")
+local clientZone = rangeCatalog:Category("zones", 103)
+assert(clientZone.minLevel == 40 and clientZone.maxLevel == 61, "Keep the client-provided range for a zone")
+
+local function rangeRow(kind, category, filter, status, showOutliers)
+    for _, row in ipairs(rangeCatalog:Rows(kind, category, filter, status, showOutliers)) do
+        if row.group.key == depthQuest then return row end
+    end
+end
+local function allTurnedIn() return "completed" end
+assert(not rangeRow("zones", 101, "completed", allTurnedIn),
+    "The completed filter cannot reintroduce a hidden outlier")
+assert(rangeRow("zones", 101, "completed", allTurnedIn, true).step.quest.id == depthQuest,
+    "The outlier toggle restores the quest while preserving completion filtering")
+local function readyOutlier(id) return id == depthQuest and "ready" or nil end
+assert(rangeRow("dungeons", 1, nil, readyOutlier).step.quest.id == prep,
+    "A dungeon preparation step remains visible even when the dungeon step is an outlier")
+assert(rangeRow("dungeons", 1, nil, readyOutlier, true).step.quest.id == depthQuest,
+    "Show outliers lets the ready dungeon step be selected")
 print("browse tests passed")
