@@ -28,7 +28,7 @@ function WindowMixin.Initialize(frame, callbacks)
 
     local footer = frame.JournalTabs
     footer.minTabWidth = 92
-    footer.Tabs = { footer.Search, footer.Zones, footer.Dungeons, footer.ActiveChains }
+    footer.Tabs = { footer.Search, footer.Zones, footer.Dungeons, footer.Classes, footer.ActiveChains }
     PanelTemplates_SetNumTabs(footer, #footer.Tabs)
 
     local catalogWidth, bodyHeight = defaultWidth - 2 * sideMargin, defaultHeight - bodyTop - bodyBottom
@@ -49,14 +49,15 @@ function WindowMixin.Initialize(frame, callbacks)
     })
     questDetails:Initialize(detailWidth, bodyHeight, back)
 
-    local journal = ns.Journal.New()
-    local tabIndex = { search = 1, zones = 2, dungeons = 3, activeChains = 4 }
+    local journal = ns.Journal.New(callbacks.playerClass)
+    local tabs = { "search", "zones", "dungeons", "classes", "activeChains" }
+    local tabIndex = {}
+    for index, tab in ipairs(tabs) do tabIndex[tab] = index end
     local locationNav = frame.LocationNav
     local home, locationTitle = locationNav.Home, locationNav.Heading
     local questsSection, rewardsSection = locationNav.Quests, locationNav.Rewards
     Widgets.bindBreadcrumb(home)
     locationTitle:SetPoint("LEFT", home, "RIGHT", 12, 0)
-    home:SetScript("OnClick", function() window:OpenLocations(journal.route.kind) end)
     questsSection:SetScript("OnClick", function()
         window:OpenCategory(journal.route.kind, journal.route.key)
     end)
@@ -94,6 +95,15 @@ function WindowMixin.Initialize(frame, callbacks)
         callbacks.openJournalRoute(journal.route)
     end
 
+    home:SetScript("OnClick", function()
+        if journal.route.kind == "classes" then
+            journal:OpenSearch()
+            navigate()
+        else
+            window:OpenLocations(journal.route.kind)
+        end
+    end)
+
     function window:Route() return journal.route end
 
     function window:RefreshNavigation() showPage() end
@@ -122,7 +132,7 @@ function WindowMixin.Initialize(frame, callbacks)
         showPage()
     end
 
-    for index, tab in ipairs({ "search", "zones", "dungeons", "activeChains" }) do
+    for index, tab in ipairs(tabs) do
         footer.Tabs[index]:SetScript("OnClick", function()
             if tab == "search" then journal:OpenSearch() else journal:SelectTab(tab) end
             navigate()
