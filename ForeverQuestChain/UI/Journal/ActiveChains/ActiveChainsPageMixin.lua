@@ -33,7 +33,12 @@ function ActiveChainsPage.Initialize(frame, width, height, openQuest)
         for index, group in ipairs(groups) do
             local header = headers[index]
             if not header then
-                header = CreateFrame("Button", nil, body, "ForeverQuestChainActiveChainsHeaderTemplate")
+                header = makeButton(body)
+                header.title:ClearAllPoints()
+                header.title:SetPoint("LEFT", 8, 0)
+                header.title:SetPoint("RIGHT", -8, 0)
+                header.title:SetTextColor(unpack(colors.accent))
+                header.meta:Hide()
                 header:SetScript("OnClick", function(self)
                     collapsed[self.groupKey] = not collapsed[self.groupKey]
                     render()
@@ -47,8 +52,8 @@ function ActiveChainsPage.Initialize(frame, width, height, openQuest)
             local count = #group.rows
             local countText = count == 1 and "1 chain" or (count .. " chains")
             local kind = group.kind == "dungeons" and "Dungeon" or "Zone"
-            header:SetText(group.category.name .. "  /  " .. kind .. "  /  " .. countText)
-            header.toggle:SetText(collapsed[group.key] and "+" or "−")
+            header.title:SetText((collapsed[group.key] and "+  " or "-  ") .. group.category.name
+                .. "  /  " .. kind .. "  /  " .. countText)
             header:Show()
             y = y + 34
             if not collapsed[group.key] then
