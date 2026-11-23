@@ -26,10 +26,9 @@ end
 function QuestDetails.Initialize(frame, width, height, back)
     frame:SetSize(width, height)
     frame.BackButton:SetScript("OnClick", back)
-    local paper = frame.Parchment
     frame.BackButton:SetText(BACK or "Back")
 
-    local contentWidth = width - 26
+    local contentWidth = width - 31
     local scroll = frame.DetailsScroll
     scroll:EnableMouseWheel(true)
     local body = scroll:GetScrollChild()
@@ -75,25 +74,24 @@ function QuestDetails.Initialize(frame, width, height, back)
         hideAll(locationButtons)
         choose:Hide()
         receive:Hide()
-        local contrast = QuestTextContrast
-        local parchment = contrast and contrast.GetDefaultDetailsBackgroundAtlas()
-        paper:SetAtlas(parchment or "QuestDetailsBackgrounds")
-        local textColor = contrast and contrast.UseLightText() and colors.text or colors.ink
         local y, textCount, locationCount = 8, 0, 0
-        local function text(value, style, gap)
+        local function text(value, style, gap, color)
             textCount = textCount + 1
-            local line = detailLines[textCount] or font(body, "QuestFont", textColor)
+            local line = detailLines[textCount] or font(body, "GameFontHighlight", colors.text)
             detailLines[textCount] = line
-            line:SetFontObject(style or "QuestFont")
-            line:SetTextColor(unpack(textColor))
+            line:SetFontObject(style or "GameFontHighlight")
+            line:SetTextColor(unpack(color or colors.text))
             line:SetPoint("TOPLEFT", 8, -y)
             line:SetWidth(contentWidth - 16)
             line:SetText(value)
             line:Show()
             y = y + line:GetStringHeight() + (gap or 5)
         end
-        local function listLocations(heading, locations)
-            text(heading, "QuestTitleFont")
+        local function sectionTitle(value, gap)
+            text(value, "GameFontNormal", gap, colors.accent)
+        end
+        local function listLocations(title, locations)
+            sectionTitle(title)
             if #locations == 0 then text("Unavailable") end
             for _, location in ipairs(locations) do
                 local value = location.name
@@ -118,7 +116,7 @@ function QuestDetails.Initialize(frame, width, height, back)
             end
         end
 
-        text(quest.title, "QuestTitleFont", 2)
+        text(quest.title, "GameFontNormalLarge", 8, colors.accent)
         local objectiveText = log and log.objectiveText
         if not objectiveText or objectiveText == "" then
             objectiveText = #quest.objectives > 0 and table.concat(quest.objectives, "\n") or "Unavailable"
@@ -128,19 +126,19 @@ function QuestDetails.Initialize(frame, width, height, back)
             if objective.text and objective.text ~= "" and objective.type ~= "spell" and objective.type ~= "log" then
                 local value = objective.finished and (objective.text .. " (" .. (COMPLETE or "Complete") .. ")")
                     or objective.text
-                text(value, "QuestFontNormalSmall", 2)
+                text(value, "GameFontHighlightSmall", 2)
             end
         end
         y = y + 12
         local description = log and log.description
         if description and description:find("%S") then
-            text(QUEST_DESCRIPTION or "Description", "QuestTitleFont", 2)
+            sectionTitle(QUEST_DESCRIPTION or "Description", 2)
             text(description, nil, 15)
         end
         local context = "#" .. quest.id .. (quest.level and ("  /  Level " .. quest.level) or "")
-        text(context .. (quest.zone and ("  /  " .. quest.zone) or ""), "QuestFontNormalSmall", 10)
+        text(context .. (quest.zone and ("  /  " .. quest.zone) or ""), "GameFontHighlightSmall", 10, colors.muted)
         if requirement then
-            text("Prerequisites", "QuestTitleFont")
+            sectionTitle("Prerequisites")
             text(requirement, nil, 12)
         end
         listLocations("Starts at", quest.starters)

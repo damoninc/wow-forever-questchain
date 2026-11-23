@@ -18,11 +18,9 @@ local tryLinkReward = Widgets.tryLinkReward
 
 function RewardPage.Initialize(frame, width, height, callbacks)
     frame:SetSize(width, height)
-    local query, hint = frame.SearchBox, frame.SearchHint
-    query:SetScript("OnTextChanged", function(self)
-        local value = self:GetText()
-        hint:SetShown(value == "")
-        if not query.updating then callbacks.search(value) end
+    local query = frame.SearchBox
+    query:HookScript("OnTextChanged", function(self)
+        if not self.updating then callbacks.search(self:GetText()) end
     end)
     query:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     query:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)

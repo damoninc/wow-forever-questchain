@@ -45,23 +45,20 @@
         <KeyValues>
             <KeyValue key="listTop" value="78" type="number"/>
         </KeyValues>
-        <Layers>
-            <Layer level="OVERLAY">
-                <FontString parentKey="SearchHint" inherits="GameFontDisableSmall" justifyH="LEFT" justifyV="TOP" text="Find a location">
-                    <Size x="330"/>
-                    <Anchors><Anchor point="TOPLEFT" x="23" y="-45"/></Anchors>
-                    <Color r="0.76" g="0.73" b="0.66"/>
-                </FontString>
-            </Layer>
-        </Layers>
         <Frames>
-            <EditBox parentKey="SearchBox" inherits="InputBoxTemplate" autoFocus="false" letters="100">
+            <EditBox parentKey="SearchBox" inherits="SearchBoxTemplate" letters="100">
                 <Size x="360" y="24"/>
                 <Anchors><Anchor point="TOPLEFT" x="19" y="-39"/></Anchors>
+                <KeyValues>
+                    <KeyValue key="instructionText" value="Find a location" type="string"/>
+                </KeyValues>
             </EditBox>
-            <DropdownButton parentKey="Levels" inherits="WowStyle1DropdownTemplate">
-                <Size x="155"/>
+            <DropdownButton parentKey="Levels" inherits="WowStyle1FilterDropdownTemplate">
+                <Size x="120" y="22"/>
                 <Anchors><Anchor point="TOPRIGHT" x="-16" y="-39"/></Anchors>
+                <KeyValues>
+                    <KeyValue key="resizeToText" value="false" type="boolean"/>
+                </KeyValues>
             </DropdownButton>
             <Button parentKey="CurrentZone" inherits="ForeverQuestChainControlTemplate" text="Current Zone">
                 <Size x="114" y="24"/>

@@ -1,4 +1,25 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Button name="ForeverQuestChainActiveChainsHeaderTemplate" virtual="true">
+        <Size y="30"/>
+        <Layers>
+            <Layer level="OVERLAY">
+                <FontString parentKey="toggle" inherits="GameFontNormal" justifyH="RIGHT">
+                    <Size x="18"/>
+                    <Anchors><Anchor point="RIGHT" x="-9"/></Anchors>
+                </FontString>
+            </Layer>
+        </Layers>
+        <ButtonText justifyH="LEFT" maxLines="1">
+            <Anchors>
+                <Anchor point="LEFT" x="9"/>
+                <Anchor point="RIGHT" relativeKey="$parent.toggle" relativePoint="LEFT" x="-6"/>
+            </Anchors>
+        </ButtonText>
+        <NormalFont style="GameFontNormal"/>
+        <HighlightFont style="GameFontHighlight"/>
+        <NormalTexture atlas="common-button-list-collapseExpand"/>
+        <HighlightTexture atlas="common-button-list-collapseExpand" alphaMode="ADD" alpha="0.3"/>
+    </Button>
     <Frame name="ForeverQuestChainActiveChainsPageTemplate" inherits="ForeverQuestChainListPanelTemplate"
            mixin="ForeverQuestChainActiveChainsPageMixin" virtual="true"/>
 </Ui>

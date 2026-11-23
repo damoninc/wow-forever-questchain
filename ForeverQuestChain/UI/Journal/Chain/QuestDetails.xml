@@ -1,39 +1,14 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-    <Frame name="ForeverQuestChainQuestDetailsTemplate"
+    <Frame name="ForeverQuestChainQuestDetailsTemplate" inherits="InsetFrameTemplate"
            mixin="ForeverQuestChainQuestDetailsMixin" virtual="true">
-        <Layers>
-            <Layer level="BACKGROUND">
-                <Texture parentKey="Parchment" atlas="QuestDetailsBackgrounds" useAtlasSize="true">
-                    <Anchors>
-                        <Anchor point="TOPLEFT"/>
-                        <Anchor point="BOTTOMRIGHT" x="-20"/>
-                    </Anchors>
-                </Texture>
-            </Layer>
-            <Layer level="BORDER">
-                <Texture atlas="questlog-reward-top-frame">
-                    <Size y="43"/>
-                    <Anchors>
-                        <Anchor point="TOPLEFT"/>
-                        <Anchor point="TOPRIGHT" x="-20"/>
-                    </Anchors>
-                </Texture>
-            </Layer>
-        </Layers>
         <Frames>
-            <Frame inherits="QuestLogBorderFrameTemplate">
-                <Anchors>
-                    <Anchor point="TOPLEFT" x="-3" y="7"/>
-                    <Anchor point="BOTTOMRIGHT" x="-17" y="-6"/>
-                </Anchors>
-            </Frame>
             <Button parentKey="BackButton" inherits="ForeverQuestChainControlTemplate" text="BACK">
                 <Size x="90" y="24"/>
                 <Anchors><Anchor point="TOPLEFT" x="11" y="-10"/></Anchors>
             </Button>
             <ScrollFrame parentKey="DetailsScroll" inherits="ScrollFrameTemplate">
                 <Anchors>
-                    <Anchor point="TOPLEFT" x="3" y="-50"/>
+                    <Anchor point="TOPLEFT" x="8" y="-46"/>
                     <Anchor point="BOTTOMRIGHT" x="-23" y="7"/>
                 </Anchors>
                 <ScrollChild>

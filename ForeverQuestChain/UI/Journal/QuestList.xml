@@ -8,11 +8,6 @@
                     <Anchors><Anchor point="TOPLEFT" x="12" y="-9"/></Anchors>
                     <Color r="1" g="0.82" b="0"/>
                 </FontString>
-                <FontString parentKey="SearchHint" inherits="GameFontDisableSmall" justifyH="LEFT" justifyV="TOP" text="Quest name or ID">
-                    <Size x="420"/>
-                    <Anchors><Anchor point="TOPLEFT" x="23" y="-54"/></Anchors>
-                    <Color r="0.76" g="0.73" b="0.66"/>
-                </FontString>
                 <FontString parentKey="CategoryHint" inherits="GameFontHighlightSmall" justifyH="LEFT" justifyV="TOP"
                             text="Quest chains and standalone quests" hidden="true">
                     <Size x="470"/>
@@ -22,9 +17,12 @@
             </Layer>
         </Layers>
         <Frames>
-            <EditBox parentKey="SearchBox" inherits="InputBoxTemplate" autoFocus="false" letters="100">
+            <EditBox parentKey="SearchBox" inherits="SearchBoxTemplate" letters="100">
                 <Size x="443" y="24"/>
                 <Anchors><Anchor point="TOPLEFT" x="19" y="-48"/></Anchors>
+                <KeyValues>
+                    <KeyValue key="instructionText" value="Quest name or ID" type="string"/>
+                </KeyValues>
             </EditBox>
             <Button parentKey="Go" inherits="ForeverQuestChainControlTemplate" text="Go">
                 <Size x="74" y="24"/>

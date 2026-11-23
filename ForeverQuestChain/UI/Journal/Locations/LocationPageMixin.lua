@@ -31,8 +31,7 @@ function LocationPage.Initialize(frame, width, height, openCategory, currentZone
     frame:SetSize(width, height)
     local body, scroll, contentWidth, title =
         Widgets.bindPanel(frame, width, "DUNGEONS")
-    local query, hint, levels = frame.SearchBox, frame.SearchHint, frame.Levels
-    levels.Text:SetJustifyH("LEFT")
+    local query, levels = frame.SearchBox, frame.Levels
     query:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     local notice = label(body, "GameFontHighlightSmall", colors.muted, 4, 4, contentWidth - 8, "")
     local current = frame.CurrentZone
@@ -89,6 +88,7 @@ function LocationPage.Initialize(frame, width, height, openCategory, currentZone
         if not kind then return end
         hideAll(cards)
         local state = states[kind]
+        levels:SetText(state.mine and "My level" or "All levels")
         local filter, shown = state.query:lower(), 0
         local columns = math.max(2, math.floor((contentWidth + 12) / 190))
         local cardWidth = math.floor((contentWidth - (columns - 1) * 12) / columns)
@@ -145,8 +145,7 @@ function LocationPage.Initialize(frame, width, height, openCategory, currentZone
     scroll:HookScript("OnVerticalScroll", function(self)
         if kind then states[kind].offset = self:GetVerticalScroll() end
     end)
-    query:SetScript("OnTextChanged", function(self)
-        hint:SetShown(self:GetText() == "")
+    query:HookScript("OnTextChanged", function(self)
         if updating or not kind then return end
         states[kind].query, states[kind].offset = self:GetText(), 0
         render(0)

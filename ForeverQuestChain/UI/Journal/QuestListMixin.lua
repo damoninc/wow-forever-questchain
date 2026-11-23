@@ -23,7 +23,7 @@ function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
     local resultsTop = 85
     catalog:SetSize(catalogWidth, bodyHeight)
     local catalogTitle, search = catalog.Heading, catalog.SearchBox
-    local hint, find = catalog.SearchHint, catalog.Go
+    local find = catalog.Go
     search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
     local function runSearch()
@@ -32,9 +32,7 @@ function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
     end
     find:SetScript("OnClick", runSearch)
     search:SetScript("OnEnterPressed", runSearch)
-    search:SetScript("OnTextChanged", function(self)
-        hint:SetShown(self:GetText() == "")
-    end)
+    search.clearButton:HookScript("OnClick", function() callbacks.search("") end)
 
     local categoryMenu = catalog.CategoryMenu
     categoryMenu.Text:SetJustifyH("LEFT")
@@ -119,7 +117,6 @@ function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
         search:ClearFocus()
         search:SetShown(not enabled)
         find:SetShown(not enabled)
-        hint:SetShown(not enabled and search:GetText() == "")
         local classes = enabled and kind == "classes"
         categoryMenu:SetShown(classes)
         categoryHint:SetShown(enabled and not classes)
