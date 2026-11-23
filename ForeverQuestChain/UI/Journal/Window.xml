@@ -65,7 +65,8 @@
                         <Anchors><Anchor point="TOPLEFT" relativeKey="$parent.Zones" relativePoint="BOTTOMLEFT" y="-2"/></Anchors>
                         <KeyValues>
                             <KeyValue key="tooltipText" value="Dungeons" type="string"/>
-                            <KeyValue key="iconTexture" value="Interface\Icons\INV_Misc_Key_14" type="string"/>
+                            <KeyValue key="iconAtlas" value="Dungeon" type="string"/>
+                            <KeyValue key="fillToInterior" value="false" type="boolean"/>
                         </KeyValues>
                     </Frame>
                     <Frame parentKey="Classes" inherits="ForeverQuestChainJournalTabTemplate">

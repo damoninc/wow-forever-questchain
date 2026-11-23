@@ -135,7 +135,12 @@ function WindowMixin.Initialize(frame, callbacks)
     end
 
     for key, tab in pairs(tabs) do
-        tab.Icon:SetTexture(tab.iconTexture)
+        if tab.iconAtlas then
+            tab.Icon:SetAtlas(tab.iconAtlas)
+            tab.Icon:SetSize(40, 40)
+        else
+            tab.Icon:SetTexture(tab.iconTexture)
+        end
         tab:SetCustomOnMouseUpHandler(function(_, button, upInside)
             if button ~= "LeftButton" or not upInside then return end
             if key == "search" then journal:OpenSearch() else journal:SelectTab(key) end
