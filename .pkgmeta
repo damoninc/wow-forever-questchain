@@ -12,11 +12,14 @@ optional-dependencies:
 ignore:
   - .github
   - .gitignore
+  - .luacheckrc
   - .luarc.json
+  - .rocks
   - .vscode
   - AGENTS.md
   - README.md
   - docs
+  - questchain-dev-scm-1.rockspec
   - tests
   - tools
   - types

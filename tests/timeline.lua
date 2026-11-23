@@ -1,5 +1,5 @@
 local ns = {}
-assert(loadfile("ForeverQuestChain/Timeline.lua"))("ForeverQuestChain", ns)
+assert(loadfile("ForeverQuestChain/UI/Journal/Chain/Timeline.lua"))("ForeverQuestChain", ns)
 
 local function edge(fromId, toId, kind)
     return { fromId = fromId, toId = toId, kind = kind or "sequence" }

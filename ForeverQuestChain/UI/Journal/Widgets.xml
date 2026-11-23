@@ -1,0 +1,64 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Frame name="ForeverQuestChainListPanelTemplate" inherits="InsetFrameTemplate" virtual="true">
+        <Layers>
+            <Layer level="OVERLAY">
+                <FontString parentKey="Heading" inherits="GameFontNormalSmall" justifyH="LEFT" justifyV="TOP">
+                    <Anchors>
+                        <Anchor point="TOPLEFT" x="12" y="-12"/>
+                        <Anchor point="TOPRIGHT" x="-12" y="-12"/>
+                    </Anchors>
+                    <Color r="1" g="0.82" b="0"/>
+                </FontString>
+            </Layer>
+        </Layers>
+        <Frames>
+            <ScrollFrame parentKey="ListScroll" inherits="UIPanelScrollFrameTemplate">
+                <Anchors>
+                    <Anchor point="TOPLEFT" x="10" y="-36"/>
+                    <Anchor point="BOTTOMRIGHT" x="-26" y="10"/>
+                </Anchors>
+                <ScrollChild>
+                    <Frame parentKey="Content">
+                        <Size x="1" y="1"/>
+                    </Frame>
+                </ScrollChild>
+            </ScrollFrame>
+        </Frames>
+    </Frame>
+
+    <Button name="ForeverQuestChainRowTemplate" virtual="true">
+        <Layers>
+            <Layer level="BACKGROUND">
+                <Texture parentKey="background" setAllPoints="true">
+                    <Color r="0.10" g="0.08" b="0.06" a="0.90"/>
+                </Texture>
+            </Layer>
+            <Layer level="OVERLAY">
+                <FontString parentKey="title" inherits="GameFontHighlight" justifyH="LEFT" justifyV="TOP" wordwrap="false">
+                    <Anchors><Anchor point="TOPLEFT" x="8" y="-6"/></Anchors>
+                    <Color r="1" g="1" b="1"/>
+                </FontString>
+                <FontString parentKey="meta" inherits="GameFontHighlightSmall" justifyH="LEFT" justifyV="TOP" wordwrap="false">
+                    <Anchors><Anchor point="TOPLEFT" x="8" y="-24"/></Anchors>
+                    <Color r="0.76" g="0.73" b="0.66"/>
+                </FontString>
+            </Layer>
+        </Layers>
+        <HighlightTexture file="Interface\QuestFrame\UI-QuestTitleHighlight" alphaMode="ADD"/>
+    </Button>
+
+    <Button name="ForeverQuestChainBreadcrumbTemplate" virtual="true">
+        <Size y="22"/>
+        <Layers>
+            <Layer level="OVERLAY">
+                <FontString parentKey="crumbText" inherits="GameFontNormal" justifyH="LEFT" justifyV="MIDDLE" wordwrap="false" maxLines="1">
+                    <Anchors><Anchor point="LEFT"/></Anchors>
+                </FontString>
+            </Layer>
+        </Layers>
+    </Button>
+
+    <Button name="ForeverQuestChainControlTemplate" inherits="UIPanelButtonTemplate" virtual="true">
+        <Size y="24"/>
+    </Button>
+</Ui>

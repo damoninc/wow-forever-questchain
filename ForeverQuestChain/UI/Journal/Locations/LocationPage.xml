@@ -1,0 +1,72 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Button name="ForeverQuestChainLocationCardTemplate" virtual="true">
+        <Layers>
+            <Layer level="BACKGROUND">
+                <Texture parentKey="art" setAllPoints="true"/>
+            </Layer>
+            <Layer level="OVERLAY">
+                <FontString parentKey="title" inherits="QuestTitleFontBlackShadow" justifyH="CENTER" justifyV="TOP" maxLines="2">
+                    <Anchors>
+                        <Anchor point="TOPLEFT" x="12" y="-15"/>
+                        <Anchor point="TOPRIGHT" x="-12" y="-15"/>
+                    </Anchors>
+                    <Color r="1" g="0.82" b="0"/>
+                    <Shadow>
+                        <Offset x="1" y="-1"/>
+                        <Color r="0" g="0" b="0" a="1"/>
+                    </Shadow>
+                </FontString>
+                <FontString parentKey="level" inherits="GameFontNormalSmall" justifyH="LEFT" justifyV="TOP">
+                    <Anchors>
+                        <Anchor point="BOTTOMLEFT" x="9" y="9"/>
+                        <Anchor point="BOTTOMRIGHT" x="-9" y="9"/>
+                    </Anchors>
+                    <Color r="1" g="0.82" b="0"/>
+                    <Shadow>
+                        <Offset x="1" y="-1"/>
+                        <Color r="0" g="0" b="0" a="1"/>
+                    </Shadow>
+                </FontString>
+            </Layer>
+        </Layers>
+        <NormalTexture file="Interface\EncounterJournal\UI-EncounterJournalTextures">
+            <TexCoords left="0.00195313" right="0.34179688" top="0.42871094" bottom="0.52246094"/>
+        </NormalTexture>
+        <PushedTexture file="Interface\EncounterJournal\UI-EncounterJournalTextures">
+            <TexCoords left="0.00195313" right="0.34179688" top="0.33300781" bottom="0.42675781"/>
+        </PushedTexture>
+        <HighlightTexture file="Interface\EncounterJournal\UI-EncounterJournalTextures" alphaMode="ADD">
+            <TexCoords left="0.34570313" right="0.68554688" top="0.33300781" bottom="0.42675781"/>
+        </HighlightTexture>
+    </Button>
+
+    <Frame name="ForeverQuestChainLocationPageTemplate" inherits="ForeverQuestChainListPanelTemplate"
+           mixin="ForeverQuestChainLocationPageMixin" virtual="true">
+        <KeyValues>
+            <KeyValue key="listTop" value="78" type="number"/>
+        </KeyValues>
+        <Layers>
+            <Layer level="OVERLAY">
+                <FontString parentKey="SearchHint" inherits="GameFontDisableSmall" justifyH="LEFT" justifyV="TOP" text="Find a location">
+                    <Size x="330"/>
+                    <Anchors><Anchor point="TOPLEFT" x="23" y="-45"/></Anchors>
+                    <Color r="0.76" g="0.73" b="0.66"/>
+                </FontString>
+            </Layer>
+        </Layers>
+        <Frames>
+            <EditBox parentKey="SearchBox" inherits="InputBoxTemplate" autoFocus="false" letters="100">
+                <Size x="360" y="24"/>
+                <Anchors><Anchor point="TOPLEFT" x="19" y="-39"/></Anchors>
+            </EditBox>
+            <DropdownButton parentKey="Levels" inherits="WowStyle1DropdownTemplate">
+                <Size x="155"/>
+                <Anchors><Anchor point="TOPRIGHT" x="-16" y="-39"/></Anchors>
+            </DropdownButton>
+            <Button parentKey="CurrentZone" inherits="ForeverQuestChainControlTemplate" text="Current Zone">
+                <Size x="114" y="24"/>
+                <Anchors><Anchor point="TOPRIGHT" x="-16" y="-5"/></Anchors>
+            </Button>
+        </Frames>
+    </Frame>
+</Ui>

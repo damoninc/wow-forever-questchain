@@ -1,5 +1,11 @@
 local ns = {}
-for _, file in ipairs({ "QuestData", "Chain", "Browse", "RewardCatalog" }) do
+for _, file in ipairs({
+    "Quests/QuestRequirements", "Quests/QuestIndex", "Quests/QuestSearch", "Quests/QuestChain",
+    "Progress/QuestProgress", "Progress/ActiveChainsQuery", "Locations/QuestLocationContext",
+    "Locations/LocationQuestCatalog", "Rewards/LocationRewardCatalog", "Adapters/Forever/ForeverMapMetadata",
+    "Adapters/QuestieDB/QuestieLocationLookup", "Adapters/QuestieDB/QuestieQuestRepository",
+    "Adapters/QuestieDB/QuestieQuestLocationRepository", "Adapters/QuestieDB/QuestieRewardSourceRepository",
+}) do
     assert(loadfile("ForeverQuestChain/" .. file .. ".lua"))("ForeverQuestChain", ns)
 end
 
@@ -46,7 +52,7 @@ C_Map = {
 }
 
 local spawnCalls = 0
-local source = assert(ns.QuestData.New({
+local questie = {
     RequireContract = function() return true end,
     Enum = {
         sortKeys = { MAGE = -161 },
@@ -84,12 +90,21 @@ local source = assert(ns.QuestData.New({
             dungeons = { [1581] = { "The Deadmines", { 10029 } }, [2717] = { "Molten Core" } },
         } }
     end },
-}))
+}
 
-local model = ns.Chain.New(source)
-local work = coroutine.create(function() return ns.Browse.Build(model, source, coroutine.yield) end)
+local maps = ns.ForeverMapMetadata.New()
+local lookup = ns.QuestieLocationLookup.New(questie, maps)
+local quests = ns.QuestieQuestRepository.New(questie, lookup)
+local locations = ns.QuestieQuestLocationRepository.New(questie, lookup)
+local rewards = ns.QuestieRewardSourceRepository.New(questie)
+local unknownCharacter = { GetIdentity = function() return {} end }
+local index = ns.QuestIndex.New(quests, unknownCharacter)
+local model = ns.QuestSearch.New(index)
+local work = coroutine.create(function()
+    return ns.LocationQuestCatalog.Build(index, locations, maps, coroutine.yield)
+end)
 assert(coroutine.resume(work))
-assert(coroutine.status(work) == "suspended" and model.quests == nil and spawnCalls == 0)
+assert(coroutine.status(work) == "suspended" and spawnCalls == 0)
 assert(model:Search("A Lead")[1].id == 2)
 local search = model:Search("Local errand")
 assert(search[1].id == 11 and search[2].id == 94 and search[3].id == 10 and search[6].id == 12)
@@ -140,7 +155,7 @@ local function questStatus(id)
     return ({ [1] = "completed", [2] = "active", [3] = "ready" })[id]
 end
 local rows = browse:Rows("zones", 1, nil, questStatus)
-local last, page, count = ns.Browse.Page(rows, 999)
+local last, page, count = ns.LocationQuestCatalog.Page(rows, 999)
 assert(count >= 3 and page == count and #last > 0)
 assert(#rows == #stormwind)
 assert(rows[1].group.key == 1 and rows[1].step.quest.id == 3 and rows[1].status == "active" and rows[1].completed == 1)
@@ -153,7 +168,7 @@ local allComplete = browse:Rows("zones", 2, nil, function() return "completed" e
 assert(#allComplete == 2 and allComplete[1].status == "completed")
 assert(browse:Rows("zones", 2, "incomplete", function() return "completed" end)[1] == nil)
 
-local activeChains = browse:ActiveChains({
+local activeChains = ns.ActiveChainsQuery.Rows(browse, {
     [2] = { status = "active", zone = "Westfall" },
     [3] = { status = "ready", zone = "Stormwind" },
     [4] = { status = "active" },
@@ -168,11 +183,11 @@ assert(activeChains[1].title == "The Plot" and activeChains[1].count == 3,
 assert(activeChains[1].step.quest.id == 3 and activeChains[1].log.zone == "Stormwind",
     "Open the ready-to-turn-in step ahead of other active steps")
 assert(activeChains[2].step.quest.id == 21, "An active later step is enough to include a chain")
-local optionalChain = browse:ActiveChains({ [2] = { status = "active" }, [5] = { status = "active" } })[1]
+local optionalChain = ns.ActiveChainsQuery.Rows(browse, { [2] = { status = "active" }, [5] = { status = "active" } })[1]
 assert(optionalChain.step.quest.id == 5 and optionalChain.step.destination == 2,
     "Open the first active step when statuses tie and preserve the optional destination")
 
-local activeGroups, activeCount = browse:ActiveChainGroups({
+local activeGroups, activeCount = ns.ActiveChainsQuery.Group(browse, {
     [2] = { status = "active", zone = "Westfall" },
     [3] = { status = "ready", zone = "Stormwind" },
     [21] = { status = "active", zone = "Stormwind" },
@@ -186,39 +201,40 @@ assert(#activeGroups[2].rows == 1 and activeGroups[2].rows[1].key == 1
 assert(activeGroups[1].kind == "zones" and activeGroups[1].category.key == 1
     and activeGroups[1].rows[1].key == 20,
     "Group other chains by active pickup zone and sort equal-level sections by name")
-local preparation = browse:ActiveChainGroups({ [5] = { status = "active", zone = "Westfall" } })
+local preparation = ns.ActiveChainsQuery.Group(browse, { [5] = { status = "active", zone = "Westfall" } })
 assert(#preparation == 1 and preparation[1].category.key == 1581
     and preparation[1].rows[1].step.destination == 2,
     "A preparation step belongs under its chain's dungeon before the dungeon quest is accepted")
-local noActive, noActiveCount = browse:ActiveChainGroups({ [999] = { status = "active" } })
+local noActive, noActiveCount = ns.ActiveChainsQuery.Group(browse, { [999] = { status = "active" } })
 assert(#noActive == 0 and noActiveCount == 0, "Unknown quests must not invent location groups")
 
-local view = model:Build(5, nil, westfallPlot.steps[1].destination)
+local view = ns.QuestChain.New(index):Build(5, nil, westfallPlot.steps[1].destination)
 assert(view.focusId == 5 and #view.quests == 5)
 
 local function forCharacter(raceId, faction)
-    return ns.Chain.New(source, function() return source.characterFilter(raceId, faction) end)
+    local character = { GetIdentity = function() return { raceId = raceId, faction = faction } end }
+    return ns.QuestIndex.New(quests, character)
 end
 local alliance = forCharacter(95, "Alliance")
 local horde = forCharacter(96, "Horde")
 local human = forCharacter(1, "Alliance")
-local plots = alliance:Search("The Plot")
+local plots = ns.QuestSearch.New(alliance):Search("The Plot")
 assert(#plots == 1 and plots[1].id == 1)
-assert(#horde:Search("The Plot") == 2)
-assert(#horde:Search("2") == 0 and not horde:Build(2))
-assert(alliance:Search("2")[1].id == 2 and alliance:Search("7")[1].id == 7)
-assert(#human:Search("7") == 0 and human:Search("2")[1].id == 2)
-assert(#forCharacter(nil, "Horde"):Search("2") == 0)
-assert(forCharacter(nil, "Horde"):Search("4")[1].id == 4)
-assert(forCharacter(nil, nil):Search("2")[1].id == 2)
+assert(#ns.QuestSearch.New(horde):Search("The Plot") == 2)
+assert(#ns.QuestSearch.New(horde):Search("2") == 0 and not ns.QuestChain.New(horde):Build(2))
+assert(ns.QuestSearch.New(alliance):Search("2")[1].id == 2 and ns.QuestSearch.New(alliance):Search("7")[1].id == 7)
+assert(#ns.QuestSearch.New(human):Search("7") == 0 and ns.QuestSearch.New(human):Search("2")[1].id == 2)
+assert(#ns.QuestSearch.New(forCharacter(nil, "Horde")):Search("2") == 0)
+assert(ns.QuestSearch.New(forCharacter(nil, "Horde")):Search("4")[1].id == 4)
+assert(ns.QuestSearch.New(forCharacter(nil, nil)):Search("2")[1].id == 2)
 
-local hordeView = horde:Build(3)
+local hordeView = ns.QuestChain.New(horde):Build(3)
 assert(#hordeView.quests == 1 and hordeView.quests[1].id == 3)
 assert(#hordeView.missingIds == 0 and not hordeView.uncertainIds[3])
-local hordeBrowse = ns.Browse.Build(horde, source)
+local hordeBrowse = ns.LocationQuestCatalog.Build(horde, locations, maps)
 local hordeDungeon = hordeBrowse:Groups("dungeons", 1581)
 assert(#hordeDungeon == 1 and #hordeDungeon[1].steps == 1 and hordeDungeon[1].steps[1].quest.id == 3)
-local hordeRewards = ns.RewardCatalog.Build(source):Search(hordeBrowse, "dungeons", 1581, "")
+local hordeRewards = ns.LocationRewardCatalog.Build(rewards):Search(hordeBrowse, "dungeons", 1581, "")
 assert(#hordeRewards == 1 and hordeRewards[1].item.id == 100 and #hordeRewards[1].sources == 1)
 assert(hordeRewards[1].sources[1].quest.id == 3)
 
@@ -227,7 +243,7 @@ local function wetlandsModel(nextQuest)
         [95647] = quest("Lost in the Thicket Things", { nextQuestInChain = nextQuest }),
         [95809] = quest("Heartwoven"),
     }
-    local wetlands = assert(ns.QuestData.New({
+    local wetlands = {
         RequireContract = function() return true end,
         Quest = {
             GetAllIds = function() return { 95647, 95809 } end,
@@ -238,20 +254,34 @@ local function wetlandsModel(nextQuest)
                 return fields
             end,
         },
-    }))
-    return ns.Chain.New(wetlands)
+    }
+    local wetlandsLookup = ns.QuestieLocationLookup.New(wetlands, maps)
+    local wetlandsRepo = ns.QuestieQuestRepository.New(wetlands, wetlandsLookup)
+    local wetlandsIndex = ns.QuestIndex.New(wetlandsRepo, unknownCharacter)
+    return ns.QuestChain.New(wetlandsIndex), wetlandsIndex, ns.QuestieQuestLocationRepository.New(wetlands, wetlandsLookup)
 end
 
 assert(#wetlandsModel():Build(95809).quests == 1)
-local wetlands = wetlandsModel(95809)
+local wetlands, wetlandsIndex, wetlandsLocations = wetlandsModel(95809)
 for _, id in ipairs({ 95647, 95809 }) do
     local chain = wetlands:Build(id)
     assert(#chain.quests == 2 and chain.quests[1].id == 95647 and chain.quests[2].id == 95809)
     assert(#chain.edges == 1 and chain.edges[1].kind == "sequence")
 end
-local missingPickup = ns.Browse.Build(wetlands, wetlands.source):ActiveChainGroups({
+local wetlandsCatalog = ns.LocationQuestCatalog.Build(wetlandsIndex, wetlandsLocations, maps)
+local missingPickup = ns.ActiveChainsQuery.Group(wetlandsCatalog, {
     [95647] = { status = "active" },
 })
 assert(#missingPickup == 1 and missingPickup[1].kind == "zones" and missingPickup[1].category.key == 0,
     "Keep active chains with missing pickup data visible in the unknown pickup zone section")
+local context = ns.QuestLocationContext.New({
+    GetClassCategories = function() return {} end,
+    GetDungeon = function() return nil end,
+    GetPickupZones = function() return { { key = 1 }, { key = 2 } } end,
+    GetRecordedZone = function() return nil end,
+}, {
+    GetPlayerMapId = function() return 3 end,
+    GetMap = function() return { parentMapId = 2 } end,
+})
+assert(context:ForQuest(2).category.key == 2, "Prefer a pickup zone that contains the player's current subzone")
 print("browse tests passed")

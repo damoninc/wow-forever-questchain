@@ -1,0 +1,67 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Frame name="ForeverQuestChainQuestListTemplate"
+           mixin="ForeverQuestChainQuestListMixin" virtual="true">
+        <Layers>
+            <Layer level="OVERLAY">
+                <FontString parentKey="Heading" inherits="GameFontNormalLarge" justifyH="LEFT" justifyV="TOP" text="Find a quest">
+                    <Size x="260"/>
+                    <Anchors><Anchor point="TOPLEFT" x="12" y="-9"/></Anchors>
+                    <Color r="1" g="0.82" b="0"/>
+                </FontString>
+                <FontString parentKey="SearchHint" inherits="GameFontDisableSmall" justifyH="LEFT" justifyV="TOP" text="Quest name or ID">
+                    <Size x="420"/>
+                    <Anchors><Anchor point="TOPLEFT" x="23" y="-54"/></Anchors>
+                    <Color r="0.76" g="0.73" b="0.66"/>
+                </FontString>
+                <FontString parentKey="CategoryHint" inherits="GameFontHighlightSmall" justifyH="LEFT" justifyV="TOP"
+                            text="Quest chains and standalone quests" hidden="true">
+                    <Size x="470"/>
+                    <Anchors><Anchor point="TOPLEFT" x="12" y="-54"/></Anchors>
+                    <Color r="0.76" g="0.73" b="0.66"/>
+                </FontString>
+            </Layer>
+        </Layers>
+        <Frames>
+            <EditBox parentKey="SearchBox" inherits="InputBoxTemplate" autoFocus="false" letters="100">
+                <Size x="443" y="24"/>
+                <Anchors><Anchor point="TOPLEFT" x="19" y="-48"/></Anchors>
+            </EditBox>
+            <Button parentKey="Go" inherits="ForeverQuestChainControlTemplate" text="Go">
+                <Size x="74" y="24"/>
+                <Anchors><Anchor point="LEFT" relativeKey="$parent.SearchBox" relativePoint="RIGHT" x="10"/></Anchors>
+            </Button>
+            <Button parentKey="ClassQuests" inherits="ForeverQuestChainControlTemplate" text="Class quests">
+                <Size x="118" y="24"/>
+                <Anchors><Anchor point="TOPRIGHT" x="-12" y="-8"/></Anchors>
+            </Button>
+            <CheckButton parentKey="HideCompleted" inherits="UICheckButtonTemplate" hidden="true">
+                <Size x="22" y="22"/>
+                <Anchors><Anchor point="TOPLEFT" x="524" y="-48"/></Anchors>
+            </CheckButton>
+            <Button parentKey="ShowCompleted" inherits="ForeverQuestChainControlTemplate" text="Show completed" hidden="true">
+                <Size x="130" y="24"/>
+                <Anchors><Anchor point="TOPLEFT" x="680" y="-48"/></Anchors>
+            </Button>
+            <DropdownButton parentKey="CategoryMenu" inherits="WowStyle1DropdownTemplate" hidden="true">
+                <Size x="310"/>
+                <Anchors><Anchor point="TOPLEFT" x="12" y="-48"/></Anchors>
+            </DropdownButton>
+            <Frame parentKey="Results" inherits="ForeverQuestChainListPanelTemplate">
+                <Anchors><Anchor point="TOPLEFT" y="-85"/></Anchors>
+                <KeyValues>
+                    <KeyValue key="listTop" value="58" type="number"/>
+                </KeyValues>
+                <Frames>
+                    <Button parentKey="NextPage" inherits="ForeverQuestChainControlTemplate" text="Next page">
+                        <Size x="88" y="24"/>
+                        <Anchors><Anchor point="TOPRIGHT" x="-25" y="-5"/></Anchors>
+                    </Button>
+                    <Button parentKey="PreviousPage" inherits="ForeverQuestChainControlTemplate" text="Previous page">
+                        <Size x="101" y="24"/>
+                        <Anchors><Anchor point="TOPRIGHT" x="-214" y="-5"/></Anchors>
+                    </Button>
+                </Frames>
+            </Frame>
+        </Frames>
+    </Frame>
+</Ui>

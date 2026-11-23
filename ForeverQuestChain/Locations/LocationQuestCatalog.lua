@@ -1,8 +1,12 @@
 local _, ns = ...
 
-local Browse = {}
-Browse.__index = Browse
-ns.Browse = Browse
+---@class LocationQuestCatalog
+local LocationQuestCatalog = {}
+LocationQuestCatalog.__index = LocationQuestCatalog
+ns.LocationQuestCatalog = LocationQuestCatalog
+
+local selectionPriority = ns.QuestProgress.SelectionPriority
+local QuestLocationContext = ns.QuestLocationContext
 
 local unknownZone = { key = 0, name = "Unknown pickup zone" }
 
@@ -101,8 +105,10 @@ local function groupQuests(quests, neighbors, ids)
     return nodes
 end
 
-function Browse.Build(model, source, yieldWork)
-    local quests, neighbors = model:Catalog(yieldWork)
+---@param locationRepository QuestLocationRepository
+---@param mapMetadata MapMetadata
+function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata, yieldWork)
+    local quests, neighbors = questIndex:Catalog(yieldWork)
     local ids = {}
     for id in pairs(quests) do ids[#ids + 1] = id end
     table.sort(ids)
@@ -114,8 +120,8 @@ function Browse.Build(model, source, yieldWork)
         local bucket = index[category.key]
         if not bucket then
             bucket = { key = category.key, name = category.name, byGroup = {}, groups = {} }
-            if kind ~= "classes" and source.categoryLevels then
-                bucket.minLevel, bucket.maxLevel = source.categoryLevels(kind, category.key)
+            if category.mapId then
+                bucket.minLevel, bucket.maxLevel = mapMetadata:GetLevelRange(category.mapId)
                 bucket.hasMapLevels = bucket.minLevel ~= nil
             end
             index[category.key] = bucket
@@ -140,17 +146,20 @@ function Browse.Build(model, source, yieldWork)
     for index, id in ipairs(ids) do
         local quest, node = quests[id], nodes[id]
         local chain = node.browseGroup or node.group
-        local dungeon = source.dungeon(quest.areaId)
-        local step = { quest = quest, order = node.order, destination = node.destination, dungeon = dungeon, chain = chain }
-        steps[id] = step
-        local zones = source.pickupZones(id)
+        local dungeon = locationRepository:GetDungeon(id)
+        local zones = locationRepository:GetPickupZones(id)
         if #zones == 0 then zones = { unknownZone } end
+        local step = {
+            quest = quest, order = node.order, destination = node.destination,
+            dungeon = dungeon, chain = chain, pickupZones = zones,
+        }
+        steps[id] = step
         for _, category in ipairs(zones) do add("zones", category, step, chain) end
         if dungeon then
             chain.dungeons = chain.dungeons or {}
             chain.dungeons[dungeon.key] = dungeon
         end
-        for _, category in ipairs(source.classes(quest.zoneOrSort, quest.classMask)) do
+        for _, category in ipairs(locationRepository:GetClassCategories(id)) do
             add("classes", category, step, chain)
         end
         if yieldWork and index % 80 == 0 then yieldWork() end
@@ -165,7 +174,7 @@ function Browse.Build(model, source, yieldWork)
         end
         if yieldWork and index % 80 == 0 then yieldWork() end
     end
-    return setmetatable({ byKind = byKind, source = source, steps = steps }, Browse)
+    return setmetatable({ byKind = byKind, mapMetadata = mapMetadata, steps = steps }, LocationQuestCatalog)
 end
 
 local function byName(left, right)
@@ -174,7 +183,7 @@ local function byName(left, right)
     return a < b
 end
 
-function Browse:Categories(kind)
+function LocationQuestCatalog:Categories(kind)
     local results = {}
     for _, category in pairs(self.byKind[kind]) do results[#results + 1] = category end
     table.sort(results, function(left, right)
@@ -185,11 +194,11 @@ function Browse:Categories(kind)
     return results
 end
 
-function Browse:Category(kind, key)
+function LocationQuestCatalog:Category(kind, key)
     return self.byKind[kind][key]
 end
 
-function Browse:Groups(kind, key)
+function LocationQuestCatalog:Groups(kind, key)
     local category = self:Category(kind, key)
     if not category then return {} end
     if not category.sorted then
@@ -213,89 +222,15 @@ function Browse:Groups(kind, key)
     return category.groups
 end
 
-function Browse:MatchZone(mapId)
-    local seen = {}
-    while mapId and mapId > 0 and not seen[mapId] do
-        local category = self.byKind.zones[mapId]
-        if category then return category end
-        seen[mapId] = true
-        mapId = self.source.zoneParent(mapId)
-    end
+function LocationQuestCatalog:MatchZone(mapId)
+    return QuestLocationContext.FindMapCategory(self.mapMetadata, mapId, self.byKind.zones)
 end
 
-local stepPriority = { ready = 4, active = 3, unstarted = 2, completed = 1 }
-
-function Browse:ActiveChains(logged)
-    local rows, byChain = {}, {}
-    for id, log in pairs(logged) do
-        local step = self.steps[id]
-        local chain = step and step.chain
-        if chain and not chain.standalone then
-            local row = byChain[chain.key]
-            if not row then
-                row = { key = chain.key, title = chain.title, count = 0, step = step, log = log }
-                byChain[chain.key] = row
-                rows[#rows + 1] = row
-            end
-            row.count = row.count + 1
-            local priority, selectedPriority = stepPriority[log.status], stepPriority[row.log.status]
-            if priority > selectedPriority or (priority == selectedPriority and step.order < row.step.order) then
-                row.step, row.log = step, log
-            end
-        end
-    end
-    table.sort(rows, function(a, b)
-        local aLevel = a.log.level or a.step.quest.level or math.huge
-        local bLevel = b.log.level or b.step.quest.level or math.huge
-        if aLevel ~= bLevel then return aLevel < bLevel end
-        local left, right = a.title:lower(), b.title:lower()
-        if left == right then return a.key < b.key end
-        return left < right
-    end)
-    return rows
+function LocationQuestCatalog:GetStep(questId)
+    return self.steps[questId]
 end
 
-function Browse:ActiveChainGroups(logged)
-    local rows = self:ActiveChains(logged)
-    local zonesByChain = {}
-    for id in pairs(logged) do
-        local step = self.steps[id]
-        local chain = step and step.chain
-        if chain and not chain.standalone and not chain.dungeons then
-            local zones = self.source.pickupZones(id)
-            if #zones == 0 then zones = { unknownZone } end
-            local locations = zonesByChain[chain.key] or {}
-            zonesByChain[chain.key] = locations
-            for _, zone in ipairs(zones) do locations[zone.key] = zone end
-        end
-    end
-
-    local groups, byLocation = {}, {}
-    for _, row in ipairs(rows) do
-        local dungeons = row.step.chain.dungeons
-        local kind = dungeons and "dungeons" or "zones"
-        for key, location in pairs(dungeons or zonesByChain[row.key]) do
-            local identity = kind .. ":" .. key
-            local group = byLocation[identity]
-            if not group then
-                group = { key = identity, kind = kind, category = self:Category(kind, key) or location, rows = {} }
-                byLocation[identity] = group
-                groups[#groups + 1] = group
-            end
-            group.rows[#group.rows + 1] = row
-        end
-    end
-    table.sort(groups, function(a, b)
-        local left, right = a.category, b.category
-        local aLevel, bLevel = left.minLevel or math.huge, right.minLevel or math.huge
-        if aLevel ~= bLevel then return aLevel < bLevel end
-        if left.name:lower() ~= right.name:lower() then return left.name:lower() < right.name:lower() end
-        return a.key < b.key
-    end)
-    return groups, #rows
-end
-
-function Browse:Rows(kind, key, filter, getStatus)
+function LocationQuestCatalog:Rows(kind, key, filter, getStatus)
     local rows, standalone = {}, {}
     for _, group in ipairs(self:Groups(kind, key)) do
         local selected, selectedStatus, priority = nil, nil, 0
@@ -306,7 +241,7 @@ function Browse:Rows(kind, key, filter, getStatus)
             if done then completed = completed + 1 end
             active = active or status == "active" or status == "ready"
             local matches = not filter or (filter == "completed" and done) or (filter == "incomplete" and not done)
-            local rank = stepPriority[status]
+            local rank = selectionPriority[status]
             if matches and (rank > priority or (done and rank == priority)) then
                 selected, selectedStatus, priority = step, status, rank
             end
@@ -324,7 +259,7 @@ function Browse:Rows(kind, key, filter, getStatus)
     return rows
 end
 
-function Browse.Page(rows, page)
+function LocationQuestCatalog.Page(rows, page)
     local pageSize = 40
     local total = math.max(1, math.ceil(#rows / pageSize))
     page = math.max(1, math.min(page, total))

@@ -1,0 +1,26 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Button name="ForeverQuestChainMinimapTemplate" mixin="ForeverQuestChainMinimapMixin" virtual="true">
+        <Size x="31" y="31"/>
+        <Layers>
+            <Layer level="BACKGROUND">
+                <Texture file="Interface\Minimap\UI-Minimap-Background">
+                    <Size x="20" y="20"/>
+                    <Anchors><Anchor point="TOPLEFT" x="7" y="-5"/></Anchors>
+                </Texture>
+            </Layer>
+            <Layer level="ARTWORK">
+                <Texture file="Interface\QuestFrame\UI-QuestLog-BookIcon">
+                    <Size x="17" y="17"/>
+                    <Anchors><Anchor point="TOPLEFT" x="7" y="-6"/></Anchors>
+                </Texture>
+            </Layer>
+            <Layer level="OVERLAY">
+                <Texture file="Interface\Minimap\MiniMap-TrackingBorder">
+                    <Size x="53" y="53"/>
+                    <Anchors><Anchor point="TOPLEFT"/></Anchors>
+                </Texture>
+            </Layer>
+        </Layers>
+        <HighlightTexture file="Interface\Minimap\UI-Minimap-ZoomButton-Highlight" alphaMode="ADD"/>
+    </Button>
+</Ui>

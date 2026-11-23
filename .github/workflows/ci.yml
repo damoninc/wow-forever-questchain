@@ -22,9 +22,11 @@ jobs:
       - name: Test Lua and automatic versions
         run: |
           sudo apt-get update
-          sudo apt-get install -y lua5.1
-          for test in tests/*.lua; do lua5.1 "$test"; done
-          luac5.1 -p ForeverQuestChain/*.lua
+          sudo apt-get install -y lua5.1 liblua5.1-0-dev luarocks
+          luarocks --lua-version=5.1 --tree=.rocks make --only-deps
+          .rocks/bin/luacheck ForeverQuestChain
+          python3 tools/check-lua.py
+          python3 tests/runtime.py
           python3 tests/release.py
 
       - name: Test real BigWigs packages without publishing

@@ -1,5 +1,5 @@
 local ns = {}
-assert(loadfile("ForeverQuestChain/LocationArt.lua"))("ForeverQuestChain", ns)
+assert(loadfile("ForeverQuestChain/UI/Journal/Locations/LocationArt.lua"))("ForeverQuestChain", ns)
 
 local layer = { layerWidth = 1000, layerHeight = 600, tileWidth = 256, tileHeight = 256 }
 local textures = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }
