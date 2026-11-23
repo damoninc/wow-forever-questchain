@@ -132,9 +132,11 @@ function QuestDetails.Initialize(frame, width, height, back)
             end
         end
         y = y + 12
-        text(QUEST_DESCRIPTION or "Description", "QuestTitleFont", 2)
         local description = log and log.description
-        text(description and description ~= "" and description or "Unavailable", nil, 15)
+        if description and description:find("%S") then
+            text(QUEST_DESCRIPTION or "Description", "QuestTitleFont", 2)
+            text(description, nil, 15)
+        end
         local context = "#" .. quest.id .. (quest.level and ("  /  Level " .. quest.level) or "")
         text(context .. (quest.zone and ("  /  " .. quest.zone) or ""), "QuestFontNormalSmall", 10)
         if requirement then

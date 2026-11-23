@@ -36,8 +36,6 @@ function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
         hint:SetShown(self:GetText() == "")
     end)
 
-    local classButton = catalog.ClassQuests
-    classButton:SetScript("OnClick", function() callbacks.openClassQuests() end)
     local categoryMenu = catalog.CategoryMenu
     categoryMenu.Text:SetJustifyH("LEFT")
     local categoryHint, hideCompleted = catalog.CategoryHint, catalog.HideCompleted
@@ -51,6 +49,25 @@ function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
     showCompleted:SetScript("OnClick", function()
         callbacks.setCompletedFilter(not completedOnly and "completed" or nil)
     end)
+    local showOutliers = catalog.ShowOutliers
+    showOutliers.Text:SetText("Show outlier quests")
+    showOutliers.Text:SetTextColor(unpack(colors.muted))
+    showOutliers:SetHitRectInsets(0, -showOutliers.Text:GetStringWidth() - 6, 0, 0)
+    showOutliers:SetScript("OnClick", function(self)
+        callbacks.setShowOutliers(self:GetChecked())
+    end)
+    showOutliers:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Outlier quests")
+        GameTooltip:AddLine("These quests are far below or above the typical quest levels for this location.",
+            1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    local function hideOutlierTooltip(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end
+    showOutliers:SetScript("OnLeave", hideOutlierTooltip)
+    showOutliers:SetScript("OnHide", hideOutlierTooltip)
 
     local resultPanel = catalog.Results
     resultPanel:SetSize(catalogWidth, bodyHeight - resultsTop)
@@ -108,6 +125,7 @@ function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
         categoryHint:SetShown(enabled and not classes)
         hideCompleted:SetShown(enabled)
         showCompleted:SetShown(enabled)
+        showOutliers:SetShown(enabled and not classes)
         resultTitle:SetText(enabled and "BROWSE QUESTS" or "SEARCH RESULTS")
         zoneTitle:SetText(enabled and "Type / Progress" or "Zone")
         statusTitle:SetText(enabled and "Status" or "Quest log")
@@ -118,6 +136,10 @@ function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
         completedOnly = filter == "completed"
         hideCompleted:SetChecked(filter == "incomplete")
         showCompleted:SetText(completedOnly and "Show all" or "Show completed")
+    end
+
+    function page:SetShowOutliers(shown)
+        showOutliers:SetChecked(shown == true)
     end
 
     function page:SetBrowseCategories(options, prompt)
@@ -228,7 +250,6 @@ function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
     function page:UpdateVisibility(shown, scoped)
         catalog:SetShown(shown)
         catalogTitle:SetShown(not scoped)
-        classButton:SetShown(not scoped)
     end
 
     function page:UpdateFocus(windowShown)

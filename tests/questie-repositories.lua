@@ -1,6 +1,6 @@
 local ns = {}
 for _, module in ipairs({
-    "QuestieLocationLookup", "QuestieQuestRepository", "QuestieQuestLocationRepository",
+    "QuestieLocationLookup", "QuestieQuestRepository", "ForeverDungeonAssignments", "QuestieQuestLocationRepository",
     "QuestieRewardSourceRepository",
 }) do
     local load = loadfile("ForeverQuestChain/Adapters/QuestieDB/" .. module .. ".lua")
@@ -71,7 +71,8 @@ local lib = {
         spawns = function(id)
             spawnCalls = spawnCalls + 1
             return ({ [11] = { [108] = { { 10, 40 } } },
-                [12] = { [40] = { { 25, 20 } }, [50] = { { 16, 90 } } } })[id]
+                [12] = { [40] = { { 25, 20 } }, [50] = { { 16, 90 } } },
+                [13] = { [1581] = { { -1, -1 } } } })[id]
         end,
     },
     Object = {
@@ -147,6 +148,16 @@ assert(details.starters[3].name == "Notice board" and details.starters[3].mapId 
 assert(details.finishers[1].name == "Guard" and details.finishers[1].mapId == nil,
     "Ambiguous spawns leave the waypoint absent")
 assert(readCounts.startedBy == 1 and spawnCalls == 2, "Reuse starter and spawn reads across the repositories")
+
+records[94969] = { zoneOrSort = 0 }
+records[95056] = { zoneOrSort = 1581 }
+records[95775] = { zoneOrSort = 0, objectives = { { { 13 } } } }
+local krol = locations:GetDungeon(94969)
+assert(krol and krol.key == 16842 and krol.name == "Krol'dok Stronghold" and not krol.mapId,
+    "A listed quest with no provider assignment uses the verified dungeon fallback")
+assert(locations:GetDungeon(95056).key == 1581, "A provider assignment wins over the local fallback")
+assert(locations:GetDungeon(95775).key == 1581, "A verified provider objective wins over the local fallback")
+assert(locations:GetDungeon(94968) == nil, "A fallback can never create a missing quest")
 
 local rewardAdapter = ns.QuestieRewardSourceRepository
 local rewards = rewardAdapter.New(lib)

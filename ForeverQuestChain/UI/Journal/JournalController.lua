@@ -180,7 +180,7 @@ function JournalController.New(dependencies)
             message = "Pick a category to see its quests and chains."
         else
             local filter = browse.completedFilter
-            local rows = browseIndex:Rows(browse.kind, browse.category, filter, questLogStatus)
+            local rows = browseIndex:Rows(browse.kind, browse.category, filter, questLogStatus, browse.showOutliers)
             local page
             page, pageNumber, pageCount = LocationQuestCatalog.Page(rows, browse.page)
             browse.page = pageNumber
@@ -191,10 +191,11 @@ function JournalController.New(dependencies)
                 local group, step = row.group, row.step
                 local quest = step.quest
                 local detail = group.standalone and (browse.kind == "dungeons" and "Dungeon quest" or "Quest")
+                    or (row.status == "completed" and "Chain")
                     or ("Chain  /  %d/%d complete"):format(row.completed, #group.steps)
                 entries[#entries + 1] = {
                     title = group.title, id = group.standalone and quest.id or nil,
-                    level = group.level, detail = detail, logStatus = row.status,
+                    level = row.level, detail = detail, logStatus = row.status,
                     action = function()
                         openQuest(quest.id, step.destination, {
                             kind = browse.kind, category = browseIndex:Category(browse.kind, browse.category),
@@ -263,6 +264,7 @@ function JournalController.New(dependencies)
             else
                 print("QuestChain Browse: " .. tostring(result))
             end
+            if not window then return end
             if browsing then
                 updateBrowseCategories()
                 showBrowse(window.questList:Offset())
@@ -335,6 +337,7 @@ function JournalController.New(dependencies)
         loadBrowseIndex()
         updateBrowseCategories()
         window.questList:SetCompletedFilter(browse.completedFilter)
+        window.questList:SetShowOutliers(browse.showOutliers)
         showBrowse(browse.offset)
     end
 
@@ -365,10 +368,7 @@ function JournalController.New(dependencies)
                 currentZone = function()
                     return browseIndex and browseIndex:MatchZone(mapMetadata:GetPlayerMapId())
                 end,
-                openClassQuests = function()
-                    local token = character:GetIdentity().classToken
-                    window:OpenCategory("classes", token)
-                end,
+                playerClass = character:GetIdentity().classToken,
                 openLinkedQuest = function(id) openQuest(id, nil, chainCategory) end,
                 openBrowseCategory = function(kind, category)
                     if category then window:OpenCategory(kind, category) else window:OpenLocations(kind) end
@@ -387,6 +387,10 @@ function JournalController.New(dependencies)
                 setCompletedFilter = function(filter)
                     browse.completedFilter, browse.page = filter, 1
                     window.questList:SetCompletedFilter(filter)
+                    showBrowse(0)
+                end,
+                setShowOutliers = function(shown)
+                    browse.showOutliers, browse.page = shown, 1
                     showBrowse(0)
                 end,
                 browsePage = function(step)
@@ -415,6 +419,10 @@ function JournalController.New(dependencies)
     end
 
     local controller = {}
+
+    function controller:OnLogin()
+        loadBrowseIndex()
+    end
 
     function controller:Toggle()
         getWindow():Toggle()

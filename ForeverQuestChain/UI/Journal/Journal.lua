@@ -4,12 +4,13 @@ local Journal = {}
 Journal.__index = Journal
 ns.Journal = Journal
 
-function Journal.New()
+function Journal.New(playerClass)
     local search = { tab = "search", page = "search" }
     return setmetatable({ route = search, tabs = {
         search = search,
         zones = { tab = "zones", page = "locations", kind = "zones" },
         dungeons = { tab = "dungeons", page = "locations", kind = "dungeons" },
+        classes = { tab = "classes", page = "quests", kind = "classes", key = playerClass },
         activeChains = { tab = "activeChains", page = "activeChains" },
     } }, Journal)
 end
@@ -28,13 +29,12 @@ function Journal:OpenSearch()
 end
 
 function Journal:OpenLocations(kind)
-    if kind == "classes" then return self:OpenSearch() end
+    if kind == "classes" then return self:SelectTab(kind) end
     self:Visit({ tab = kind, page = "locations", kind = kind })
 end
 
 function Journal:OpenCategory(kind, key, section)
-    self:Visit({ tab = kind == "classes" and "search" or kind,
-        page = section or "quests", kind = kind, key = key })
+    self:Visit({ tab = kind, page = section or "quests", kind = kind, key = key })
 end
 
 function Journal:OpenQuest()

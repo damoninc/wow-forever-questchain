@@ -49,6 +49,7 @@
                     </Button>
                     <Button parentKey="Zones" inherits="PanelTabButtonTemplate" text="Zones"/>
                     <Button parentKey="Dungeons" inherits="PanelTabButtonTemplate" text="Dungeons"/>
+                    <Button parentKey="Classes" inherits="PanelTabButtonTemplate" text="Class Quests"/>
                     <Button parentKey="ActiveChains" inherits="PanelTabButtonTemplate" text="Active Chains"/>
                 </Frames>
             </Frame>

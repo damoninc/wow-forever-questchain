@@ -24,20 +24,29 @@ local fallbackClassSorts = { -81, -141, -261, -162, -262, -82, -161, -61, -263 }
 ---@return QuestLocationRepository
 function QuestieQuestLocationRepository.New(lib, locationLookup)
     local dungeonsByArea = {}
-    for areaId, name in pairs(dungeonNames) do
+    local function registerDungeon(areaId, name, mapId)
         local instance = locationLookup.dungeons[areaId]
         local category = {
             key = areaId,
             name = instance and instance[1] or name,
-            mapId = locationLookup:GetAreaMapId(areaId),
+            mapId = mapId,
         }
         dungeonsByArea[areaId] = category
         for _, alias in ipairs(instance and instance[2] or {}) do
             dungeonsByArea[alias] = category
         end
+        return category
     end
-    for alias, parent in pairs(locationLookup.parents) do
-        if dungeonNames[parent] then dungeonsByArea[alias] = dungeonsByArea[parent] end
+    for areaId, name in pairs(dungeonNames) do
+        registerDungeon(areaId, name, locationLookup:GetAreaMapId(areaId))
+    end
+    local fallbackByQuest = {}
+    for areaId, dungeon in pairs(ns.ForeverDungeonAssignments) do
+        -- Keep fallback ranges quest-derived. The provider can supply a map
+        -- once it recognizes this instance rather than just the outdoor area.
+        local mapId = locationLookup.dungeons[areaId] and locationLookup:GetAreaMapId(areaId)
+        local category = registerDungeon(areaId, dungeon.name, mapId)
+        for _, id in ipairs(dungeon.quests) do fallbackByQuest[id] = category end
     end
     -- Preserve the existing Stratholme alias alongside the provider's aliases.
     dungeonsByArea[10001] = dungeonsByArea[2017]
@@ -53,7 +62,56 @@ function QuestieQuestLocationRepository.New(lib, locationLookup)
         classesBySort[sortKeys[token] or fallbackClassSorts[index]] = category
     end
 
-    local repository = {}
+    local repository, dungeonByQuest = {}, {}
+
+    local function dungeonForArea(areaId)
+        local seen = {}
+        while areaId and not seen[areaId] do
+            local dungeon = dungeonsByArea[areaId]
+            if dungeon then return dungeon end
+            seen[areaId] = true
+            areaId = locationLookup.parents[areaId]
+        end
+    end
+
+    local function dungeonForSources(npcs, objects)
+        local dungeon
+        for group, ids in ipairs({ npcs, objects }) do
+            for _, entityId in ipairs(ids) do
+                for areaId, points in pairs(locationLookup:GetSpawns(group, entityId) or {}) do
+                    if #points > 0 then
+                        local candidate = dungeonForArea(areaId)
+                        if not candidate or (dungeon and dungeon ~= candidate) then return nil end
+                        dungeon = candidate
+                    end
+                end
+            end
+        end
+        return dungeon
+    end
+
+    local function dungeonForObjectives(id)
+        local objectives = locationLookup:GetObjectives(id)
+        local dungeon
+        for group = 1, 3 do
+            for _, objective in ipairs(objectives[group] or {}) do
+                local entityId = objective[1]
+                local candidate
+                if group == 1 then
+                    candidate = dungeonForSources({ entityId }, {})
+                elseif group == 2 then
+                    candidate = dungeonForSources({}, { entityId })
+                else
+                    candidate = dungeonForSources(locationLookup:GetItemSources(entityId))
+                end
+                if candidate then
+                    if dungeon and candidate ~= dungeon then return nil end
+                    dungeon = candidate
+                end
+            end
+        end
+        return dungeon
+    end
 
     function repository:GetPickupZones(id)
         local starters = locationLookup:GetStarters(id)
@@ -76,8 +134,12 @@ function QuestieQuestLocationRepository.New(lib, locationLookup)
     end
 
     function repository:GetDungeon(id)
-        local assignment = locationLookup:GetQuestAssignments(id)
-        return assignment and dungeonsByArea[assignment.areaId]
+        if dungeonByQuest[id] == nil then
+            local assignment = locationLookup:GetQuestAssignments(id)
+            dungeonByQuest[id] = assignment
+                and (dungeonForArea(assignment.areaId) or dungeonForObjectives(id) or fallbackByQuest[id]) or false
+        end
+        return dungeonByQuest[id] or nil
     end
 
     function repository:GetClassCategories(id)

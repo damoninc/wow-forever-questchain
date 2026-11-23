@@ -1,6 +1,18 @@
 local ns = {}
 assert(loadfile("ForeverQuestChain/UI/Journal/Locations/LocationArt.lua"))("ForeverQuestChain", ns)
 
+local cardPath = "Interface\\AddOns\\ForeverQuestChain\\Media\\DungeonCards\\"
+assert(ns.LocationArt.DungeonTexture(16544) == cardPath .. "CityOfDalaran.tga")
+assert(ns.LocationArt.DungeonTexture(16611) == cardPath .. "RuinsOfLordaeron.tga")
+assert(ns.LocationArt.DungeonTexture(16732) == cardPath .. "ExcavationSiteWetlands.tga")
+assert(ns.LocationArt.DungeonTexture(16919) == cardPath .. "HallOfThanes.tga")
+assert(ns.LocationArt.DungeonTexture(16550) == cardPath .. "TheDrownedCity.tga")
+assert(ns.LocationArt.DungeonTexture(16554) == cardPath .. "BlackmawHold.tga")
+assert(ns.LocationArt.DungeonTexture(16620) == cardPath .. "AlcazPrison.tga")
+assert(ns.LocationArt.DungeonTexture(16667) == cardPath .. "ShapersTerrace.tga")
+assert(ns.LocationArt.DungeonTexture(16842) == cardPath .. "KroldokStronghold.tga")
+assert(ns.LocationArt.DungeonTexture(1584) == "Interface\\EncounterJournal\\UI-EJ-DUNGEONBUTTON-BlackrockDepths")
+
 local layer = { layerWidth = 1000, layerHeight = 600, tileWidth = 256, tileHeight = 256 }
 local textures = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }
 local tiles = ns.LocationArt.Tiles(layer, textures, 200, 120)

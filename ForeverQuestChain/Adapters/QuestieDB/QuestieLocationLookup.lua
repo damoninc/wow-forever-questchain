@@ -3,6 +3,9 @@ local _, ns = ...
 local QuestieLocationLookup = {}
 ns.QuestieLocationLookup = QuestieLocationLookup
 
+local miscellaneousItemClass = 15
+local multiDropItemFlag = 2048
+
 local function positive(value)
     return type(value) == "number" and value > 0 and value or nil
 end
@@ -36,6 +39,9 @@ function QuestieLocationLookup.New(lib, mapMetadata)
     local assignments, starters = {}, {}
     local spawnEntities, spawnsByEntity = { lib.Npc, lib.Object }, { {}, {} }
     local assignmentFields = { "zoneOrSort", "requiredClasses" }
+    local objectiveFields = { "objectives" }
+    local questItemClass = lib.Enum and lib.Enum.itemClasses and lib.Enum.itemClasses.QUEST
+    local dropSources
 
     ---@class QuestieLocationLookup
     local lookup = { dungeons = zoneInfo.dungeons or {}, parents = parents }
@@ -86,11 +92,49 @@ function QuestieLocationLookup.New(lib, mapMetadata)
     end
 
     function lookup:GetSpawns(group, id)
+        local entities = spawnEntities[group]
+        if not entities then return nil end
         local cache = spawnsByEntity[group]
         if cache[id] == nil then
-            cache[id] = spawnEntities[group].spawns(id) or false
+            cache[id] = entities.spawns(id) or false
         end
         return cache[id] or nil
+    end
+
+    function lookup:GetObjectives(id)
+        return quests.GetAll(id, objectiveFields)[1] or {}
+    end
+
+    function lookup:GetItemSources(id)
+        local items = lib.Item
+        local itemClass = items and items.class and items.class(id)
+        local flags = items and items.flags and items.flags(id) or 0
+        local questItem = itemClass ~= nil and itemClass == questItemClass
+        local sharedLoot = itemClass == miscellaneousItemClass and math.floor(flags / multiDropItemFlag) % 2 == 1
+        local vendors = items and items.vendors and items.vendors(id) or {}
+        -- Incidental drops on ordinary trade goods or vendor items do not locate the quest.
+        if #vendors > 0 or not (questItem or sharedLoot) then return {}, {} end
+
+        local npcs = items and items.npcDrops and items.npcDrops(id) or {}
+        local objects = items and items.objectDrops and items.objectDrops(id) or {}
+        if #npcs > 0 or #objects > 0 then return npcs, objects end
+
+        if not dropSources then
+            dropSources = {}
+            local support = lib.Support and lib.Support.Get("QuestieClassicItemDrops")
+            local source = support and support.wowheadData
+            -- This provider table is Lua source. Read its numeric rows without executing it.
+            if type(source) == "string" then
+                for itemId, row in source:gmatch("%[(%d+)%]%s*=%s*(%b{})") do
+                    local sources = {}
+                    for npcId, rate in row:gmatch("%[(%d+)%]%s*=%s*([%d.]+)") do
+                        if positive(tonumber(rate)) then sources[#sources + 1] = tonumber(npcId) end
+                    end
+                    dropSources[tonumber(itemId)] = sources
+                end
+            end
+        end
+        return dropSources[id] or {}, objects
     end
 
     local function point(areaId, coords)

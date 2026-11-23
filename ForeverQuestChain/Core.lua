@@ -43,6 +43,7 @@ SlashCmdList.FOREVERQUESTCHAIN = function() controller:Toggle() end
 ns.QuestLog.Register(function(id) controller:OpenFromQuestLog(id) end)
 
 local handlers = {
+    PLAYER_LOGIN = controller.OnLogin,
     QUEST_DATA_LOAD_RESULT = controller.OnQuestDataLoaded,
     GET_ITEM_INFO_RECEIVED = controller.OnItemDataLoaded,
     PLAYER_LEVEL_UP = controller.OnLevelUp,
@@ -68,3 +69,4 @@ end
 events:SetScript("OnEvent", function(_, event, ...)
     handlers[event](controller, ...)
 end)
+if IsLoggedIn() then controller:OnLogin() end

@@ -30,10 +30,10 @@
                 <Size x="74" y="24"/>
                 <Anchors><Anchor point="LEFT" relativeKey="$parent.SearchBox" relativePoint="RIGHT" x="10"/></Anchors>
             </Button>
-            <Button parentKey="ClassQuests" inherits="ForeverQuestChainControlTemplate" text="Class quests">
-                <Size x="118" y="24"/>
-                <Anchors><Anchor point="TOPRIGHT" x="-12" y="-8"/></Anchors>
-            </Button>
+            <CheckButton parentKey="ShowOutliers" inherits="UICheckButtonTemplate" hidden="true">
+                <Size x="22" y="22"/>
+                <Anchors><Anchor point="TOPLEFT" x="320" y="-48"/></Anchors>
+            </CheckButton>
             <CheckButton parentKey="HideCompleted" inherits="UICheckButtonTemplate" hidden="true">
                 <Size x="22" y="22"/>
                 <Anchors><Anchor point="TOPLEFT" x="524" y="-48"/></Anchors>

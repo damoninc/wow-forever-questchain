@@ -19,6 +19,15 @@ function QuestIndex.New(questRepository, characterState)
     return setmetatable({ questRepository = questRepository, characterState = characterState }, QuestIndex)
 end
 
+local function isBreadcrumb(fromId, toId, quests)
+    if quests[fromId] and quests[fromId].breadcrumbTarget == toId then return true end
+    local target = quests[toId]
+    for _, leadIn in ipairs(target and target.breadcrumbs or {}) do
+        if leadIn == fromId then return true end
+    end
+    return false
+end
+
 local function buildCatalog(self, yieldWork)
     local quests, visible, neighbors = {}, {}, {}
     local identity = self.characterState:GetIdentity()
@@ -57,7 +66,10 @@ local function buildCatalog(self, yieldWork)
         local quest = visible[id]
         if quest then
             for _, target in ipairs(quest.successors or {}) do
-                connect(id, target, "sequence")
+                -- Providers can repeat a breadcrumb as a sequence link.
+                if not isBreadcrumb(id, target, quests) then
+                    connect(id, target, "sequence")
+                end
             end
             if quest.parentId then
                 connect(quest.parentId, id, "sequence")

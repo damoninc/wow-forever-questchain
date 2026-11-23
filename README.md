@@ -8,7 +8,7 @@ QuestChain is an in-game quest-chain reference for **WoW: Forever**. Look up a q
 2. Download the installable ZIP from [GitHub Releases](https://github.com/damoninc/wow-forever-questchain/releases) and extract it into your Forever client's `Interface/AddOns` directory. The ZIP contains the `ForeverQuestChain` folder. For a source checkout, copy that folder from this repository instead.
 3. Enable **QuestChain** in the AddOns list. Click the book icon by the minimap or run `/questchain` in chat. Drag the icon to move it. If the new addon is absent from the AddOns list, restart the client.
 
-The journal has four main tabs: **Search**, **Zones**, **Dungeons**, and **Active Chains**. Search by title or quest ID, or choose a location card to explore its **Quests** and **Rewards** sections. Location cards sort by level and offer name and level filters. **Current Zone** opens the quests for your current location.
+The journal has five main tabs: **Search**, **Zones**, **Dungeons**, **Class Quests**, and **Active Chains**. Search by title or quest ID, or choose a location card to explore its **Quests** and **Rewards** sections. Location cards sort by level and offer name and level filters. **Current Zone** opens the quests for your current location.
 
 Location cards use Blizzard's journal borders and title styling. Classic dungeons use the client's journal thumbnails, and zones use the client's map tiles. Locations without available artwork use parchment. Hover a card to see its chain and standalone quest counts.
 
@@ -20,7 +20,7 @@ Right-click a quest in WoW's Quest Log and choose **Open in QuestChain** to jump
 
 Use the breadcrumbs above the timeline to return to the location cards or reopen the current zone, dungeon, or class list. The trail keeps the category you opened the chain from. When opening from the quest log, it uses the selected quest's known category. A verified dungeon assignment takes priority over the pickup zone. **Earlier quests** jumps to a preceding step in the current chain.
 
-Zone results follow pickup locations, so a chain can appear in several zones with different steps under each. **Class quests** on the Search page opens your class's quests, with a picker for other classes. Zone and dungeon tabs remember their selected location, quest filters, page, and list position independently while the addon is loaded.
+Zone results follow pickup locations, so a chain can appear in several zones with different steps under each. **Class Quests** opens your class's quests and includes a picker for other classes. The Zones, Dungeons, and Class Quests tabs remember their selections, filters, page, and list position independently while the addon is loaded.
 
 The **Quest log** column in Search and the **Status** column in location quests show your current character's progress.
 

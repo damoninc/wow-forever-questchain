@@ -28,6 +28,7 @@ Adapters\Forever\ForeverMapMetadata.lua
 Adapters\Forever\ForeverQuestRewardGateway.lua
 Adapters\QuestieDB\QuestieLocationLookup.lua
 Adapters\QuestieDB\QuestieQuestRepository.lua
+Adapters\QuestieDB\ForeverDungeonAssignments.lua
 Adapters\QuestieDB\QuestieQuestLocationRepository.lua
 Adapters\QuestieDB\QuestieRewardSourceRepository.lua
 UI\Journal\Journal.lua
