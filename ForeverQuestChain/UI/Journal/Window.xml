@@ -1,4 +1,10 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Frame name="ForeverQuestChainJournalTabTemplate" inherits="LargeSideTabButtonTemplate"
+           virtual="true" enableMouse="true">
+        <KeyValues>
+            <KeyValue key="fillToInterior" value="true" type="boolean"/>
+        </KeyValues>
+    </Frame>
     <Frame name="ForeverQuestChainWindowTemplate" inherits="PortraitFrameTemplate"
            mixin="ForeverQuestChainWindowMixin" virtual="true"
            hidden="true" movable="true" resizable="true" clampedToScreen="true" enableMouse="true" frameStrata="DIALOG">
@@ -38,19 +44,44 @@
                 <PushedTexture file="Interface\ChatFrame\UI-ChatIM-SizeGrabber-Down"/>
             </Button>
             <Frame parentKey="JournalTabs">
-                <Size y="42"/>
-                <Anchors>
-                    <Anchor point="BOTTOMLEFT" x="1" y="1"/>
-                    <Anchor point="BOTTOMRIGHT" x="-1" y="1"/>
-                </Anchors>
+                <Size x="1" y="1"/>
+                <Anchors><Anchor point="TOPLEFT" relativePoint="TOPRIGHT" y="-56"/></Anchors>
                 <Frames>
-                    <Button parentKey="Search" inherits="PanelTabButtonTemplate" text="Search">
-                        <Anchors><Anchor point="TOPLEFT" x="13" y="-2"/></Anchors>
-                    </Button>
-                    <Button parentKey="Zones" inherits="PanelTabButtonTemplate" text="Zones"/>
-                    <Button parentKey="Dungeons" inherits="PanelTabButtonTemplate" text="Dungeons"/>
-                    <Button parentKey="Classes" inherits="PanelTabButtonTemplate" text="Class Quests"/>
-                    <Button parentKey="ActiveChains" inherits="PanelTabButtonTemplate" text="Active Chains"/>
+                    <Frame parentKey="Search" inherits="ForeverQuestChainJournalTabTemplate">
+                        <Anchors><Anchor point="TOPLEFT"/></Anchors>
+                        <KeyValues>
+                            <KeyValue key="tooltipText" value="Search" type="string"/>
+                            <KeyValue key="iconTexture" value="Interface\Icons\INV_Misc_Spyglass_03" type="string"/>
+                        </KeyValues>
+                    </Frame>
+                    <Frame parentKey="Zones" inherits="ForeverQuestChainJournalTabTemplate">
+                        <Anchors><Anchor point="TOPLEFT" relativeKey="$parent.Search" relativePoint="BOTTOMLEFT" y="-2"/></Anchors>
+                        <KeyValues>
+                            <KeyValue key="tooltipText" value="Zones" type="string"/>
+                            <KeyValue key="iconTexture" value="Interface\Icons\INV_Misc_Map_01" type="string"/>
+                        </KeyValues>
+                    </Frame>
+                    <Frame parentKey="Dungeons" inherits="ForeverQuestChainJournalTabTemplate">
+                        <Anchors><Anchor point="TOPLEFT" relativeKey="$parent.Zones" relativePoint="BOTTOMLEFT" y="-2"/></Anchors>
+                        <KeyValues>
+                            <KeyValue key="tooltipText" value="Dungeons" type="string"/>
+                            <KeyValue key="iconTexture" value="Interface\Icons\INV_Misc_Key_14" type="string"/>
+                        </KeyValues>
+                    </Frame>
+                    <Frame parentKey="Classes" inherits="ForeverQuestChainJournalTabTemplate">
+                        <Anchors><Anchor point="TOPLEFT" relativeKey="$parent.Dungeons" relativePoint="BOTTOMLEFT" y="-2"/></Anchors>
+                        <KeyValues>
+                            <KeyValue key="tooltipText" value="Class Quests" type="string"/>
+                            <KeyValue key="iconTexture" value="Interface\Icons\INV_Misc_Book_07" type="string"/>
+                        </KeyValues>
+                    </Frame>
+                    <Frame parentKey="ActiveChains" inherits="ForeverQuestChainJournalTabTemplate">
+                        <Anchors><Anchor point="TOPLEFT" relativeKey="$parent.Classes" relativePoint="BOTTOMLEFT" y="-2"/></Anchors>
+                        <KeyValues>
+                            <KeyValue key="tooltipText" value="Active Chains" type="string"/>
+                            <KeyValue key="iconTexture" value="Interface\Icons\INV_Misc_Note_05" type="string"/>
+                        </KeyValues>
+                    </Frame>
                 </Frames>
             </Frame>
             <Frame parentKey="LocationNav">
