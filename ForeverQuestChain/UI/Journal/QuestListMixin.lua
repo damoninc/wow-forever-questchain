@@ -36,8 +36,6 @@ function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
         hint:SetShown(self:GetText() == "")
     end)
 
-    local classButton = catalog.ClassQuests
-    classButton:SetScript("OnClick", function() callbacks.openClassQuests() end)
     local categoryMenu = catalog.CategoryMenu
     categoryMenu.Text:SetJustifyH("LEFT")
     local categoryHint, hideCompleted = catalog.CategoryHint, catalog.HideCompleted
@@ -252,7 +250,6 @@ function QuestList.Initialize(catalog, catalogWidth, bodyHeight, callbacks)
     function page:UpdateVisibility(shown, scoped)
         catalog:SetShown(shown)
         catalogTitle:SetShown(not scoped)
-        classButton:SetShown(not scoped)
     end
 
     function page:UpdateFocus(windowShown)

@@ -20,7 +20,7 @@ Right-click a quest in WoW's Quest Log and choose **Open in QuestChain** to jump
 
 Use the breadcrumbs above the timeline to return to the location cards or reopen the current zone, dungeon, or class list. The trail keeps the category you opened the chain from. When opening from the quest log, it uses the selected quest's known category. A verified dungeon assignment takes priority over the pickup zone. **Earlier quests** jumps to a preceding step in the current chain.
 
-Zone results follow pickup locations, so a chain can appear in several zones with different steps under each. **Class Quests** opens your class's quests and includes a picker for other classes. The Search page also offers a shortcut to your class. The Zones, Dungeons, and Class Quests tabs remember their selections, filters, page, and list position independently while the addon is loaded.
+Zone results follow pickup locations, so a chain can appear in several zones with different steps under each. **Class Quests** opens your class's quests and includes a picker for other classes. The Zones, Dungeons, and Class Quests tabs remember their selections, filters, page, and list position independently while the addon is loaded.
 
 The **Quest log** column in Search and the **Status** column in location quests show your current character's progress.
 

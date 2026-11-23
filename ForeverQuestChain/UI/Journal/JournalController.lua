@@ -357,7 +357,6 @@ function JournalController.New(dependencies)
 
     local function getWindow()
         if not window then
-            local playerClass = character:GetIdentity().classToken
             window = dependencies.createWindow({
                 search = search, openQuest = openQuest, selectStep = selectStep,
                 openJournalRoute = openJournalRoute,
@@ -368,10 +367,7 @@ function JournalController.New(dependencies)
                 currentZone = function()
                     return browseIndex and browseIndex:MatchZone(mapMetadata:GetPlayerMapId())
                 end,
-                playerClass = playerClass,
-                openClassQuests = function()
-                    window:OpenCategory("classes", playerClass)
-                end,
+                playerClass = character:GetIdentity().classToken,
                 openLinkedQuest = function(id) openQuest(id, nil, chainCategory) end,
                 openBrowseCategory = function(kind, category)
                     if category then window:OpenCategory(kind, category) else window:OpenLocations(kind) end
