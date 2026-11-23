@@ -11,6 +11,6 @@
 ---An empty list means no assignments are known. Category records are read-only.
 ---@class QuestLocationRepository
 ---@field GetPickupZones fun(self: QuestLocationRepository, questId: integer): QuestLocationCategory[]
----@field GetDungeon fun(self: QuestLocationRepository, questId: integer): QuestLocationCategory?
+---@field GetDungeon fun(self: QuestLocationRepository, questId: integer): QuestLocationCategory? Nil when the quest has no verified dungeon assignment of its own.
 ---@field GetClassCategories fun(self: QuestLocationRepository, questId: integer): QuestLocationCategory[]
 ---@field GetRecordedZone fun(self: QuestLocationRepository, questId: integer): RecordedQuestZone?

@@ -5,10 +5,27 @@ local LocationQuestCatalog = {}
 LocationQuestCatalog.__index = LocationQuestCatalog
 ns.LocationQuestCatalog = LocationQuestCatalog
 
-local selectionPriority = ns.QuestProgress.SelectionPriority
+local QuestProgress = ns.QuestProgress
+local selectionPriority = QuestProgress.SelectionPriority
 local QuestLocationContext = ns.QuestLocationContext
+local QuestRequirements = ns.QuestRequirements
 
 local unknownZone = { key = 0, name = "Unknown pickup zone" }
+
+local function dungeonLevelRange(levels)
+    table.sort(levels)
+    local first, last = 1, #levels
+    if last >= 8 then
+        -- Use quartile fences to reject outliers. Leave room for uncommon
+        -- levels around the main cluster when most quests share a level.
+        local quarter = math.ceil(last / 4)
+        local lower, upper = levels[quarter], levels[last - quarter + 1]
+        local padding = math.max(8, 1.5 * (upper - lower))
+        while levels[first] < lower - padding do first = first + 1 end
+        while levels[last] > upper + padding do last = last - 1 end
+    end
+    return levels[first], levels[last]
+end
 
 local function rootOf(nodes, id)
     while nodes[id].root ~= id do
@@ -18,10 +35,10 @@ local function rootOf(nodes, id)
     return id
 end
 
-local function groupQuests(quests, neighbors, ids)
+local function groupQuests(questIndex, quests, neighbors, ids)
     local nodes, components = {}, {}
     for _, id in ipairs(ids) do
-        nodes[id] = { root = id, incoming = 0, children = {}, optional = {} }
+        nodes[id] = { root = id, incoming = 0, children = {}, parents = {}, optional = {} }
     end
     for _, id in ipairs(ids) do
         local node = nodes[id]
@@ -36,7 +53,12 @@ local function groupQuests(quests, neighbors, ids)
                     nodes[math.max(a, b)].root = math.min(a, b)
                     target.incoming = target.incoming + 1
                     node.children[#node.children + 1] = targetId
+                    target.parents[#target.parents + 1] = id
                 end
+            elseif edge.fromId == id and not target and edge.kind ~= "breadcrumb" and edge.kind ~= "substitute" then
+                node.missingSuccessor = true
+            elseif edge.toId == id and not nodes[edge.fromId] and edge.kind ~= "breadcrumb" and edge.kind ~= "substitute" then
+                node.parents[#node.parents + 1] = edge.fromId
             end
         end
     end
@@ -44,9 +66,23 @@ local function groupQuests(quests, neighbors, ids)
     for _, id in ipairs(ids) do
         local node = nodes[id]
         local key = rootOf(nodes, id)
-        local group = components[key] or { key = key, count = 0 }
+        local group = components[key] or {
+            key = key, members = {}, endings = {}, steps = {}, predecessors = {}, requiredOptions = {},
+        }
         components[key] = group
-        group.count = group.count + 1
+        local quest = quests[id]
+        group.members[#group.members + 1] = quest
+        group.predecessors[id] = node.parents
+        if #(quest.allOf or {}) > 0 then
+            local requirements = QuestRequirements.Describe(quest, nil, questIndex)
+            if not requirements.uncertain then
+                group.requiredOptions[id] = requirements.groups[1].options
+            end
+        end
+        group.missingSuccessor = group.missingSuccessor or node.missingSuccessor
+        if #node.children == 0 and not node.missingSuccessor then
+            group.endings[#group.endings + 1] = quests[id]
+        end
         node.group = group
         if node.incoming == 0 then
             group.start = group.start or id
@@ -74,7 +110,7 @@ local function groupQuests(quests, neighbors, ids)
     end
     for _, id in ipairs(ids) do
         local node = nodes[id]
-        if node.group.count == 1 and #node.optional > 0 then
+        if #node.group.members == 1 and #node.optional > 0 then
             local destination
             for _, targetId in ipairs(node.optional) do
                 local target = nodes[targetId]
@@ -100,7 +136,7 @@ local function groupQuests(quests, neighbors, ids)
     end
     for _, group in pairs(components) do
         group.title = quests[group.start or group.key].title
-        group.standalone = group.count == 1 and not group.hasOptional
+        group.standalone = #group.members == 1 and not group.hasOptional
     end
     return nodes
 end
@@ -112,9 +148,9 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
     local ids = {}
     for id in pairs(quests) do ids[#ids + 1] = id end
     table.sort(ids)
-    local nodes = groupQuests(quests, neighbors, ids)
+    local nodes = groupQuests(questIndex, quests, neighbors, ids)
     local byKind = { zones = {}, dungeons = {}, classes = {} }
-    local steps = {}
+    local steps, dungeonLevels = {}, {}
     local function add(kind, category, step, chain)
         local index = byKind[kind]
         local bucket = index[category.key]
@@ -128,7 +164,7 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
         end
         local group = bucket.byGroup[chain.key]
         if not group then
-            group = { key = chain.key, title = chain.title, standalone = chain.standalone, steps = {} }
+            group = { key = chain.key, title = chain.title, standalone = chain.standalone, steps = {}, chain = chain }
             bucket.byGroup[chain.key] = group
             bucket.groups[#bucket.groups + 1] = group
         end
@@ -137,7 +173,11 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
         local belongs = kind ~= "dungeons" or (step.dungeon and step.dungeon.key == category.key)
         if level and belongs then
             group.level = math.min(group.level or level, level)
-            if kind ~= "classes" and bucket.key ~= unknownZone.key and not bucket.hasMapLevels then
+            if kind == "dungeons" and not bucket.hasMapLevels then
+                local levels = dungeonLevels[category.key] or {}
+                dungeonLevels[category.key] = levels
+                levels[#levels + 1] = level
+            elseif kind == "zones" and bucket.key ~= unknownZone.key and not bucket.hasMapLevels then
                 bucket.minLevel = math.min(bucket.minLevel or level, level)
                 bucket.maxLevel = math.max(bucket.maxLevel or level, level)
             end
@@ -154,6 +194,7 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
             dungeon = dungeon, chain = chain, pickupZones = zones,
         }
         steps[id] = step
+        chain.steps[#chain.steps + 1] = step
         for _, category in ipairs(zones) do add("zones", category, step, chain) end
         if dungeon then
             chain.dungeons = chain.dungeons or {}
@@ -173,6 +214,10 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
             for _, dungeon in pairs(chain.dungeons) do add("dungeons", dungeon, step, chain) end
         end
         if yieldWork and index % 80 == 0 then yieldWork() end
+    end
+    for key, levels in pairs(dungeonLevels) do
+        local bucket = byKind.dungeons[key]
+        bucket.minLevel, bucket.maxLevel = dungeonLevelRange(levels)
     end
     return setmetatable({ byKind = byKind, mapMetadata = mapMetadata, steps = steps }, LocationQuestCatalog)
 end
@@ -232,27 +277,35 @@ end
 
 function LocationQuestCatalog:Rows(kind, key, filter, getStatus)
     local rows, standalone = {}, {}
+    local statuses = {}
+    local function statusOf(id)
+        if not statuses[id] then statuses[id] = getStatus(id) or "unstarted" end
+        return statuses[id]
+    end
     for _, group in ipairs(self:Groups(kind, key)) do
+        local chainStatus
+        if not group.standalone then
+            chainStatus = QuestProgress.ChainStatus(group.chain, statusOf)
+        end
         local selected, selectedStatus, priority = nil, nil, 0
-        local completed, active = 0, false
+        local completed = 0
         for _, step in ipairs(group.steps) do
-            local status = getStatus(step.quest.id) or "unstarted"
+            local status = statusOf(step.quest.id)
             local done = status == "completed"
             if done then completed = completed + 1 end
-            active = active or status == "active" or status == "ready"
             local matches = not filter or (filter == "completed" and done) or (filter == "incomplete" and not done)
-            local rank = selectionPriority[status]
+            local rank = chainStatus == "completed" and done and math.huge or selectionPriority[status]
             if matches and (rank > priority or (done and rank == priority)) then
                 selected, selectedStatus, priority = step, status, rank
             end
         end
+        if chainStatus == "completed" then
+            -- A completed chain can have only skipped steps in this category.
+            selected = filter ~= "incomplete" and (selected or group.steps[1]) or nil
+        end
         if selected then
-            local status = selectedStatus
-            if not group.standalone then
-                status = completed == #group.steps and "completed" or ((active or completed > 0) and "active" or "unstarted")
-            end
             local list = group.standalone and standalone or rows
-            list[#list + 1] = { group = group, step = selected, status = status, completed = completed }
+            list[#list + 1] = { group = group, step = selected, status = chainStatus or selectedStatus, completed = completed }
         end
     end
     for _, row in ipairs(standalone) do rows[#rows + 1] = row end

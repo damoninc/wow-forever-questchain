@@ -20,7 +20,7 @@ local records = {
     [2] = quest("A Lead", { startedBy = { { 12, 13 } }, nextQuestInChain = 3, zoneOrSort = 10029 }),
     [3] = quest("The Finale", { startedBy = { { 11 } }, zoneOrSort = 1581, preQuestSingle = { 2 } }),
     [4] = quest("The Plot", { startedBy = { { 11 } }, zoneOrSort = 2717 }),
-    [5] = quest("An Invitation", { startedBy = { { 12 } }, breadcrumbForQuestId = 2 }),
+    [5] = quest("An Invitation", { startedBy = { { 12 } }, breadcrumbForQuestId = 2, nextQuestInChain = 2 }),
     [6] = quest("A Shared Lead", { startedBy = { { 12 } } }),
     [7] = quest("Class Lesson", { startedBy = { [3] = { 99 } }, zoneOrSort = -161 }),
     [8] = quest("Class Training", { requiredClasses = 129 }),
@@ -39,6 +39,32 @@ end
 records[10].questLevel, records[11].questLevel = 25, 5
 records[94].questLevel, records[94].zoneOrSort = 10, 717
 records[20].questLevel, records[20].nextQuestInChain, records[21].questLevel = 40, 21, 45
+records[95] = quest("Temple Preparation", { nextQuestInChain = 96 })
+records[96] = quest("Dungeon Reagent", { zoneOrSort = -161, objectives = { [3] = { { 500 } } } })
+records[97] = quest("Reagent Found in Two Regions", { objectives = { [3] = { { 501 } } } })
+records[98] = quest("Optional Route A", { startedBy = { { 11 } }, questLevel = 50 })
+records[99] = quest("Optional Route B", { startedBy = { { 11 } }, questLevel = 50 })
+records[100] = quest("Shared Conclusion", { startedBy = { { 12 } }, preQuestSingle = { 98, 99 } })
+records[101] = quest("Fork Start", { childQuests = { 102, 103 } })
+records[102] = quest("First Ending")
+records[103] = quest("Second Ending")
+records[104] = quest("Choose an Ending", { childQuests = { 105, 106 } })
+records[105] = quest("First Choice", { exclusiveTo = { 106 } })
+records[106] = quest("Second Choice")
+records[107] = quest("Partial Chain", { nextQuestInChain = 108 })
+records[108] = quest("Known Step", { nextQuestInChain = 9999 })
+records[109] = quest("Choose a Route", { childQuests = { 110, 111 } })
+records[110] = quest("First Route", { exclusiveTo = { 111 }, nextQuestInChain = 112 })
+records[111] = quest("Second Route", { nextQuestInChain = 113 })
+records[112] = quest("First Route Conclusion")
+records[113] = quest("Second Route Conclusion")
+records[114] = quest("Buy a Reagent", { objectives = { [3] = { { 502 } } } })
+records[115] = quest("Craft a Reagent", { objectives = { [3] = { { 503 } } } })
+records[116] = quest("Choose a Branch", { childQuests = { 117, 118 } })
+records[117] = quest("First Branch", { exclusiveTo = { 118 } })
+records[118] = quest("Second Branch")
+records[119] = quest("Shared Prerequisite")
+records[120] = quest("Second Branch Conclusion", { preQuestGroup = { -118, 119 } })
 
 C_Map = {
     GetMapInfo = function(id)
@@ -56,6 +82,7 @@ local questie = {
     RequireContract = function() return true end,
     Enum = {
         sortKeys = { MAGE = -161 },
+        itemClasses = { QUEST = 12 },
         classKeys = { WARRIOR = 1, PALADIN = 2, MAGE = 128, ALL_CLASSES = 131 },
         raceMaskById = { [1] = 1, [2] = 2, [95] = skyborneAlliance, [96] = skyborneHorde },
         factionRaceMasks = { Alliance = 77 + skyborneAlliance, Horde = 178 + skyborneHorde },
@@ -77,13 +104,23 @@ local questie = {
         GetAllIds = function() return { 100, 101 } end,
         questRewards = function(id) return id == 100 and { 2, 3 } or { 2 } end,
         name = function(id) return "Reward " .. id end,
+        class = function(id) return ({ [500] = 15, [501] = 12, [502] = 12, [503] = 0 })[id] end,
+        flags = function(id) return id == 500 and 2048 or 0 end,
+        vendors = function(id) return id == 502 and { 111 } or nil end,
     },
     Npc = { spawns = function(id)
-        spawnCalls = spawnCalls + 1
+        if id < 100 then spawnCalls = spawnCalls + 1 end
         return ({ [11] = { [1519] = {{1, 1}} }, [12] = { [40] = {{1, 1}} },
-            [13] = { [108] = {{1, 1}}, [1519] = {{1, 1}} } })[id]
+            [13] = { [108] = {{1, 1}}, [1519] = {{1, 1}} },
+            [110] = { [1477] = {{-1, -1}} }, [111] = { [1519] = {{1, 1}} } })[id]
     end },
-    Support = { Get = function()
+    Support = { Get = function(module)
+        if module == "QuestieClassicItemDrops" then
+            return { wowheadData = [[return {
+                [500] = {[110] = 5}, [501] = {[110] = 5, [111] = 5},
+                [502] = {[110] = 5}, [503] = {[110] = 5},
+            }]] }
+        end
         return { private = {
             areaIdToUiMapId = { [1519] = 1, [40] = 2, [108] = 3 },
             subZoneToParentZone = { [108] = 40 },
@@ -114,6 +151,14 @@ while coroutine.status(work) ~= "dead" do
     assert(ok, result)
     browse = result
 end
+assert(not locations:GetDungeon(95) and not locations:GetDungeon(97),
+    "Pickup or an ambiguous item source cannot assign a quest to a dungeon")
+assert(not locations:GetDungeon(114) and not locations:GetDungeon(115),
+    "Incidental drops cannot assign vendor or crafted items to a dungeon")
+local temple = browse:Groups("dungeons", 1477)[1]
+assert(temple and #temple.steps == 2 and temple.steps[1].quest.id == 95
+    and temple.steps[2].quest.id == 96 and temple.steps[2].dungeon.key == 1477,
+    "A dungeon-only objective source should anchor its whole chain")
 local function groupWith(groups, key)
     for _, group in ipairs(groups) do
         if group.key == key then return group end
@@ -146,10 +191,9 @@ assert(zonesByLevel[1].key == 2 and zonesByLevel[1].minLevel == 10 and zonesByLe
 local dungeonsByLevel = browse:Categories("dungeons")
 assert(dungeonsByLevel[1].key == 717 and dungeonsByLevel[1].minLevel == 10)
 assert(dungeonsByLevel[2].key == 1581 and dungeonsByLevel[2].minLevel == 20 and dungeonsByLevel[2].maxLevel == 20)
-assert(#browse:Groups("classes", "MAGE") == 2)
+assert(#browse:Groups("classes", "MAGE") == 3)
 assert(#browse:Groups("classes", "WARRIOR") == 1)
 assert(#browse:Groups("classes", "PALADIN") == 0)
-assert(#browse:Groups("zones", 0) == 3)
 
 local function questStatus(id)
     return ({ [1] = "completed", [2] = "active", [3] = "ready" })[id]
@@ -159,14 +203,39 @@ local last, page, count = ns.LocationQuestCatalog.Page(rows, 999)
 assert(count >= 3 and page == count and #last > 0)
 assert(#rows == #stormwind)
 assert(rows[1].group.key == 1 and rows[1].step.quest.id == 3 and rows[1].status == "active" and rows[1].completed == 1)
-assert(rows[2].group.key == 20 and rows[3].group.key == 11 and rows[4].group.key == 94)
-for index = 3, #rows do assert(rows[index].group.standalone) end
+assert(rows[2].group.key == 20)
+assert(rows[3].group.key == 98 and rows[4].group.key == 11 and rows[5].group.key == 94)
+for index = 4, #rows do assert(rows[index].group.standalone) end
 local completed = browse:Rows("zones", 1, "completed", questStatus)
 assert(#completed == 1 and completed[1].group.key == 1 and completed[1].step.quest.id == 1)
 assert(completed[1].status == "active")
 local allComplete = browse:Rows("zones", 2, nil, function() return "completed" end)
-assert(#allComplete == 2 and allComplete[1].status == "completed")
-assert(browse:Rows("zones", 2, "incomplete", function() return "completed" end)[1] == nil)
+assert(#allComplete == 3 and allComplete[1].status == "completed")
+local function rowFor(kind, key, chainKey, filter, statuses)
+    for _, row in ipairs(browse:Rows(kind, key, filter, function(id) return statuses[id] end)) do
+        if row.group.key == chainKey then return row end
+    end
+end
+local finishedPlot = rowFor("dungeons", 1581, 1, nil, { [1] = "completed", [2] = "completed", [3] = "completed" })
+assert(finishedPlot.status == "completed" and finishedPlot.step.quest.id == 3,
+    "A skipped breadcrumb should not keep a finished chain open or become its selected step")
+assert(not rowFor("dungeons", 1581, 1, "incomplete", { [3] = "completed" }))
+local route = rowFor("zones", 1, 98, nil, { [98] = "completed", [100] = "completed" })
+assert(route.status == "completed", "A conclusion in another zone closes an any-one route")
+local ongoing = rowFor("zones", 2, 98, nil, { [98] = "completed" })
+assert(ongoing.status == "active", "Progress should include steps in other zones")
+assert(rowFor("zones", 0, 101, nil, { [102] = "completed" }).status == "active",
+    "One ending does not close an independent unfinished branch")
+assert(rowFor("zones", 0, 104, nil, { [106] = "completed" }).status == "completed",
+    "A completed ending can close an explicitly exclusive route")
+assert(rowFor("zones", 0, 107, nil, { [108] = "completed" }).status == "active",
+    "A recorded missing successor prevents treating the last known step as the conclusion")
+assert(rowFor("zones", 0, 109, nil, { [110] = "completed", [112] = "completed" }).status == "completed",
+    "An exclusive route stays optional through its later steps")
+assert(rowFor("zones", 0, 109, nil, { [110] = "completed" }).status == "active",
+    "Choosing a route does not complete its conclusion")
+assert(rowFor("zones", 0, 116, nil, { [117] = "completed", [119] = "completed" }).status == "completed",
+    "A shared prerequisite cannot reopen an excluded all-required route")
 
 local activeChains = ns.ActiveChainsQuery.Rows(browse, {
     [2] = { status = "active", zone = "Westfall" },
@@ -210,6 +279,10 @@ assert(#noActive == 0 and noActiveCount == 0, "Unknown quests must not invent lo
 
 local view = ns.QuestChain.New(index):Build(5, nil, westfallPlot.steps[1].destination)
 assert(view.focusId == 5 and #view.quests == 5)
+assert(#ns.QuestChain.New(index):Build(5).quests == 5,
+    "Opening a breadcrumb directly should still show the chain when it has one destination")
+assert(#ns.QuestChain.New(index):Build(6).quests == 3,
+    "Opening a shared breadcrumb should not combine separate chains")
 
 local function forCharacter(raceId, faction)
     local character = { GetIdentity = function() return { raceId = raceId, faction = faction } end }
@@ -284,4 +357,46 @@ local context = ns.QuestLocationContext.New({
     GetMap = function() return { parentMapId = 2 } end,
 })
 assert(context:ForQuest(2).category.key == 2, "Prefer a pickup zone that contains the player's current subzone")
+
+local rangeQuests, rangeNeighbors, dungeonByQuest = {}, {}, {}
+local function addDungeonLevels(dungeon, levels)
+    local start
+    for _, level in ipairs(levels) do
+        local id = #rangeQuests + 1
+        start = start or id
+        rangeQuests[id] = { id = id, title = dungeon.name .. " quest", level = level }
+        dungeonByQuest[id] = dungeon
+    end
+    return start
+end
+local plateau = { 1, 52, 52, 53, 54, 54, 55, 55, 56, 58, 59, 60, 60 }
+local depthQuest = addDungeonLevels({ key = 1, name = "Depths" }, plateau)
+addDungeonLevels({ key = 2, name = "Sparse" }, { 10, 30, 50 })
+addDungeonLevels({ key = 3, name = "Client Range", mapId = 3 }, plateau)
+addDungeonLevels({ key = 4, name = "Tight Range" }, { 50, 51, 52, 52, 52, 52, 52, 53, 60, 99 })
+local prep = #rangeQuests + 1
+rangeQuests[prep] = { id = prep, title = "Preparation", level = 49 }
+local link = { fromId = prep, toId = depthQuest, kind = "sequence" }
+rangeNeighbors[prep], rangeNeighbors[depthQuest] = { link }, { link }
+local rangeCatalog = ns.LocationQuestCatalog.Build({
+    Catalog = function() return rangeQuests, rangeNeighbors end,
+}, {
+    GetDungeon = function(_, id) return dungeonByQuest[id] end,
+    GetPickupZones = function() return { { key = 100, name = "Pickup Zone" } } end,
+    GetClassCategories = function() return {} end,
+}, {
+    GetLevelRange = function(_, id) if id == 3 then return 40, 61 end end,
+})
+local depths = rangeCatalog:Category("dungeons", 1)
+assert(depths.minLevel == 52 and depths.maxLevel == 60, "Ignore a lone level-1 dungeon quest in the range")
+assert(rangeCatalog:GetStep(depthQuest).quest.level == 1 and #groupWith(depths.groups, depthQuest).steps == 2,
+    "The original quest level remains available")
+local sparse = rangeCatalog:Category("dungeons", 2)
+assert(sparse.minLevel == 10 and sparse.maxLevel == 50, "Keep the full range for a small sample")
+local clientRange = rangeCatalog:Category("dungeons", 3)
+assert(clientRange.minLevel == 40 and clientRange.maxLevel == 61, "Prefer the client map range")
+local tight = rangeCatalog:Category("dungeons", 4)
+assert(tight.minLevel == 50 and tight.maxLevel == 60, "Remove a high outlier while keeping nearby uncommon levels")
+local pickup = rangeCatalog:Category("zones", 100)
+assert(pickup.minLevel == 1 and pickup.maxLevel == 99, "Zone fallback levels keep their full range")
 print("browse tests passed")

@@ -191,6 +191,7 @@ function JournalController.New(dependencies)
                 local group, step = row.group, row.step
                 local quest = step.quest
                 local detail = group.standalone and (browse.kind == "dungeons" and "Dungeon quest" or "Quest")
+                    or (row.status == "completed" and "Chain")
                     or ("Chain  /  %d/%d complete"):format(row.completed, #group.steps)
                 entries[#entries + 1] = {
                     title = group.title, id = group.standalone and quest.id or nil,
