@@ -15,9 +15,18 @@ local dungeonImages = {
     [2057] = "Scholomance", [2100] = "Maraudon", [2437] = "RagefireChasm", [2557] = "DireMaul",
 }
 
+local foreverDungeonCards = {
+    [16544] = "CityOfDalaran",
+    [16611] = "RuinsOfLordaeron",
+    [16732] = "ExcavationSiteWetlands",
+    [16919] = "HallOfThanes",
+}
+
 function LocationArt.DungeonTexture(areaId)
     local name = dungeonImages[areaId]
-    return name and ("Interface\\EncounterJournal\\UI-EJ-DUNGEONBUTTON-" .. name)
+    if name then return "Interface\\EncounterJournal\\UI-EJ-DUNGEONBUTTON-" .. name end
+    local card = foreverDungeonCards[areaId]
+    return card and ("Interface\\AddOns\\ForeverQuestChain\\Media\\DungeonCards\\" .. card .. ".tga")
 end
 
 function LocationArt.Tiles(layer, textures, width, height)

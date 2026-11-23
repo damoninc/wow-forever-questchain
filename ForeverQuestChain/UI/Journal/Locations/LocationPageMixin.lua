@@ -43,7 +43,7 @@ function LocationPage.Initialize(frame, width, height, openCategory, currentZone
     local cards, states, artwork, mapArtwork = {}, {}, {}, {}
     local kind, entries, message, updating
     local render
-    local function artFor(category)
+    local function setDungeonArt(texture, category)
         if kind ~= "dungeons" then return end
         if not artwork.loaded and type(EJ_GetInstanceByIndex) == "function" then
             for index = 1, 256 do
@@ -53,7 +53,10 @@ function LocationPage.Initialize(frame, width, height, openCategory, currentZone
             end
             artwork.loaded = true
         end
-        return artwork[category.name:lower()] or ns.LocationArt.DungeonTexture(category.key)
+        local image = artwork[category.name:lower()]
+        if image and texture:SetTexture(image) then return true end
+        local fallback = ns.LocationArt.DungeonTexture(category.key)
+        return fallback and texture:SetTexture(fallback)
     end
     local function showMapArt(card, category, cardWidth, artHeight)
         if kind ~= "zones" or category.key <= 0 or not C_Map.GetMapArtLayers
@@ -108,9 +111,8 @@ function LocationPage.Initialize(frame, width, height, openCategory, currentZone
                     -math.floor((shown - 1) / columns) * (cardHeight + 12))
                 card:SetSize(cardWidth, cardHeight)
                 card.title:SetText(category.name)
-                local image = artFor(category)
                 if card.mapTiles then hideAll(card.mapTiles) end
-                if image and card.art:SetTexture(image) then
+                if setDungeonArt(card.art, category) then
                     -- Journal button images occupy the upper-left 175x95 of
                     -- a 256x128 texture, as in Blizzard's instance template.
                     card.art:SetTexCoord(0, 0.68359375, 0, 0.7421875)
