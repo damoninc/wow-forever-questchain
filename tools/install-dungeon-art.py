@@ -18,6 +18,11 @@ SCREENSHOTS = {
     "RuinsOfLordaeron": "GTBUD9QLE3XW1792014833094.png",
     "ExcavationSiteWetlands": "TFBBUPOTALTZ1792014832338.png",
     "HallOfThanes": "XRAT25OFDIIQ1792014832498.png",
+    "TheDrownedCity": "IM7F57KLDDNN1792014830908.png",
+    "KroldokStronghold": "8K0OPATZI1MN1792014832735.png",
+    "AlcazPrison": "QBF73F8ILIWZ1792014830857.png",
+    "BlackmawHold": "LXIRE6TZL7KF1792014830769.png",
+    "ShapersTerrace": "N8SVJYXN9MAU1792014833421.png",
 }
 
 

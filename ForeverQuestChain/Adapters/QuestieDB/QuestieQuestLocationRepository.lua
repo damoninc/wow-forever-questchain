@@ -24,17 +24,29 @@ local fallbackClassSorts = { -81, -141, -261, -162, -262, -82, -161, -61, -263 }
 ---@return QuestLocationRepository
 function QuestieQuestLocationRepository.New(lib, locationLookup)
     local dungeonsByArea = {}
-    for areaId, name in pairs(dungeonNames) do
+    local function registerDungeon(areaId, name, mapId)
         local instance = locationLookup.dungeons[areaId]
         local category = {
             key = areaId,
             name = instance and instance[1] or name,
-            mapId = locationLookup:GetAreaMapId(areaId),
+            mapId = mapId,
         }
         dungeonsByArea[areaId] = category
         for _, alias in ipairs(instance and instance[2] or {}) do
             dungeonsByArea[alias] = category
         end
+        return category
+    end
+    for areaId, name in pairs(dungeonNames) do
+        registerDungeon(areaId, name, locationLookup:GetAreaMapId(areaId))
+    end
+    local fallbackByQuest = {}
+    for areaId, dungeon in pairs(ns.ForeverDungeonAssignments) do
+        -- Keep fallback ranges quest-derived. The provider can supply a map
+        -- once it recognizes this instance rather than just the outdoor area.
+        local mapId = locationLookup.dungeons[areaId] and locationLookup:GetAreaMapId(areaId)
+        local category = registerDungeon(areaId, dungeon.name, mapId)
+        for _, id in ipairs(dungeon.quests) do fallbackByQuest[id] = category end
     end
     -- Preserve the existing Stratholme alias alongside the provider's aliases.
     dungeonsByArea[10001] = dungeonsByArea[2017]
@@ -125,7 +137,7 @@ function QuestieQuestLocationRepository.New(lib, locationLookup)
         if dungeonByQuest[id] == nil then
             local assignment = locationLookup:GetQuestAssignments(id)
             dungeonByQuest[id] = assignment
-                and (dungeonForArea(assignment.areaId) or dungeonForObjectives(id)) or false
+                and (dungeonForArea(assignment.areaId) or dungeonForObjectives(id) or fallbackByQuest[id]) or false
         end
         return dungeonByQuest[id] or nil
     end

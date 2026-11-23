@@ -17,8 +17,13 @@ local dungeonImages = {
 
 local foreverDungeonCards = {
     [16544] = "CityOfDalaran",
+    [16550] = "TheDrownedCity",
+    [16554] = "BlackmawHold",
     [16611] = "RuinsOfLordaeron",
+    [16620] = "AlcazPrison",
+    [16667] = "ShapersTerrace",
     [16732] = "ExcavationSiteWetlands",
+    [16842] = "KroldokStronghold",
     [16919] = "HallOfThanes",
 }
 

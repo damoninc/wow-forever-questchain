@@ -4,6 +4,7 @@ for _, file in ipairs({
     "Progress/QuestProgress", "Progress/ActiveChainsQuery", "Locations/QuestLocationContext",
     "Locations/LocationQuestCatalog", "Rewards/LocationRewardCatalog", "Adapters/Forever/ForeverMapMetadata",
     "Adapters/QuestieDB/QuestieLocationLookup", "Adapters/QuestieDB/QuestieQuestRepository",
+    "Adapters/QuestieDB/ForeverDungeonAssignments",
     "Adapters/QuestieDB/QuestieQuestLocationRepository", "Adapters/QuestieDB/QuestieRewardSourceRepository",
 }) do
     assert(loadfile("ForeverQuestChain/" .. file .. ".lua"))("ForeverQuestChain", ns)
