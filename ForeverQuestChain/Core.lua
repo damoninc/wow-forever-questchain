@@ -1,26 +1,70 @@
 local _, ns = ...
 
-local source, startupError = ns.QuestData.New(LibQuestieDB)
+local supported, startupError = ns.QuestieQuestRepository.CheckContract(LibQuestieDB)
 SLASH_FOREVERQUESTCHAIN1 = "/questchain"
-if not source then
+if not supported then
     SlashCmdList.FOREVERQUESTCHAIN = function()
         print("QuestChain: " .. startupError)
     end
     return
 end
 
-local controller = ns.Controller.New(source)
+local mapMetadata = ns.ForeverMapMetadata.New()
+local characterState = ns.ForeverCharacterQuestState.New()
+local rewardGateway = ns.ForeverQuestRewardGateway.New()
+local schedule = C_Timer.After
+
+local locationLookup = ns.QuestieLocationLookup.New(LibQuestieDB, mapMetadata)
+local questRepository = ns.QuestieQuestRepository.New(LibQuestieDB, locationLookup)
+local locationRepository = ns.QuestieQuestLocationRepository.New(LibQuestieDB, locationLookup)
+local rewardSources = ns.QuestieRewardSourceRepository.New(LibQuestieDB)
+local questIndex = ns.QuestIndex.New(questRepository, characterState)
+local questProgress = ns.QuestProgress.New(questIndex, characterState)
+
+local controller = ns.JournalController.New({
+    questRepository = questRepository,
+    characterState = characterState,
+    mapMetadata = mapMetadata,
+    questSearch = ns.QuestSearch.New(questIndex),
+    questChain = ns.QuestChain.New(questIndex),
+    questProgress = questProgress,
+    locationContext = ns.QuestLocationContext.New(locationRepository, mapMetadata),
+    activeChains = ns.ActiveChainsQuery.New(characterState, questProgress),
+    describeRequirements = function(quest, view) return ns.QuestRequirements.Describe(quest, view, questIndex) end,
+    buildLocationCatalog = function(yieldWork)
+        return ns.LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata, yieldWork)
+    end,
+    buildRewardCatalog = function(yieldWork) return ns.LocationRewardCatalog.Build(rewardSources, yieldWork) end,
+    newRewardLoader = function(onUpdate) return ns.QuestRewardLoader.New(rewardGateway, schedule, onUpdate) end,
+    schedule = schedule,
+    createWindow = ns.Window.New,
+})
 SlashCmdList.FOREVERQUESTCHAIN = function() controller:Toggle() end
 ns.QuestLog.Register(function(id) controller:OpenFromQuestLog(id) end)
 
+local handlers = {
+    QUEST_DATA_LOAD_RESULT = controller.OnQuestDataLoaded,
+    GET_ITEM_INFO_RECEIVED = controller.OnItemDataLoaded,
+    PLAYER_LEVEL_UP = controller.OnLevelUp,
+    QUEST_LOG_UPDATE = controller.OnQuestLogChanged,
+    QUEST_REMOVED = controller.OnQuestLogChanged,
+    QUEST_ACCEPTED = controller.OnQuestProgressChanged,
+    QUEST_TURNED_IN = controller.OnQuestProgressChanged,
+    GROUP_ROSTER_UPDATE = controller.OnPartyChanged,
+    PARTY_MEMBER_ENABLE = controller.OnPartyChanged,
+    PARTY_MEMBER_DISABLE = controller.OnPartyChanged,
+    UNIT_QUEST_LOG_CHANGED = function(self, unit)
+        if unit == "player" then
+            self:OnQuestLogChanged()
+        elseif unit and unit:match("^party%d+$") then
+            self:OnPartyChanged()
+        end
+    end,
+}
 local events = CreateFrame("Frame")
-for _, event in ipairs({
-    "QUEST_DATA_LOAD_RESULT", "QUEST_LOG_UPDATE", "QUEST_ACCEPTED", "QUEST_TURNED_IN",
-    "QUEST_REMOVED", "PLAYER_LEVEL_UP", "GET_ITEM_INFO_RECEIVED", "GROUP_ROSTER_UPDATE",
-    "UNIT_QUEST_LOG_CHANGED", "PARTY_MEMBER_ENABLE", "PARTY_MEMBER_DISABLE",
-}) do
+for event in pairs(handlers) do
     events:RegisterEvent(event)
 end
 events:SetScript("OnEvent", function(_, event, ...)
-    controller:OnEvent(event, ...)
+    handlers[event](controller, ...)
 end)

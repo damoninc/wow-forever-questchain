@@ -27,7 +27,7 @@ local function makeLocationButton(parent)
     return button
 end
 
-function LocationPage.Initialize(frame, width, height, openCategory, currentZone)
+function LocationPage.Initialize(frame, width, height, openCategory, currentZone, playerLevel)
     frame:SetSize(width, height)
     local body, scroll, contentWidth, title =
         Widgets.bindPanel(frame, width, "DUNGEONS")
@@ -90,9 +90,10 @@ function LocationPage.Initialize(frame, width, height, openCategory, currentZone
         local columns = math.max(2, math.floor((contentWidth + 12) / 190))
         local cardWidth = math.floor((contentWidth - (columns - 1) * 12) / columns)
         local cardHeight = math.floor(cardWidth * 96 / 174 + 0.5)
+        local currentLevel = state.mine and playerLevel()
         for _, category in ipairs(entries) do
-            local matchesLevel = not state.mine or not category.minLevel
-                or (UnitLevel("player") >= category.minLevel and UnitLevel("player") <= (category.maxLevel or category.minLevel))
+            local matchesLevel = not currentLevel or not category.minLevel
+                or (currentLevel >= category.minLevel and currentLevel <= (category.maxLevel or category.minLevel))
             if matchesLevel and category.name:lower():find(filter, 1, true) then
                 shown = shown + 1
                 local card = cards[shown]

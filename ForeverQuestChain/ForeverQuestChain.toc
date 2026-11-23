@@ -7,14 +7,33 @@
 ## OptionalDeps: TomTom
 ## SavedVariables: ForeverQuestChainSettings
 
-QuestData.lua
-Chain.lua
-Browse.lua
-Rewards.lua
-RewardCatalog.lua
-Timeline.lua
-Journal.lua
-LocationArt.lua
+Quests\QuestRepository.lua
+Locations\QuestLocationRepository.lua
+Locations\MapMetadata.lua
+Progress\CharacterQuestState.lua
+Rewards\RewardSourceRepository.lua
+Rewards\QuestRewardGateway.lua
+Quests\QuestRequirements.lua
+Quests\QuestIndex.lua
+Quests\QuestSearch.lua
+Quests\QuestChain.lua
+Progress\QuestProgress.lua
+Progress\ActiveChainsQuery.lua
+Locations\QuestLocationContext.lua
+Locations\LocationQuestCatalog.lua
+Rewards\QuestRewardLoader.lua
+Rewards\LocationRewardCatalog.lua
+Adapters\Forever\ForeverCharacterQuestState.lua
+Adapters\Forever\ForeverMapMetadata.lua
+Adapters\Forever\ForeverQuestRewardGateway.lua
+Adapters\QuestieDB\QuestieLocationLookup.lua
+Adapters\QuestieDB\QuestieQuestRepository.lua
+Adapters\QuestieDB\QuestieQuestLocationRepository.lua
+Adapters\QuestieDB\QuestieRewardSourceRepository.lua
+UI\Journal\Journal.lua
+UI\Journal\Chain\Timeline.lua
+UI\Journal\Chain\QuestRequirementsText.lua
+UI\Journal\Locations\LocationArt.lua
 UI\WorldMap\MapPinMixin.lua
 UI\WorldMap\MapPin.xml
 UI\WorldMap\Map.lua
@@ -34,9 +53,8 @@ UI\Journal\ActiveChains\ActiveChainsPageMixin.lua
 UI\Journal\ActiveChains\ActiveChainsPage.xml
 UI\Journal\WindowMixin.lua
 UI\Journal\Window.xml
-ForeverQuests.lua
 UI\QuestLog\QuestLog.lua
-Controller.lua
+UI\Journal\JournalController.lua
 Core.lua
 UI\Minimap\MinimapMixin.lua
 UI\Minimap\Minimap.xml

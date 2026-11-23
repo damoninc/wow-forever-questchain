@@ -40,7 +40,7 @@ function WindowMixin.Initialize(frame, callbacks)
     local activeChainsPage, timeline, questDetails = frame.activeChains, frame.timeline, frame.questDetails
     questList:Initialize(catalogWidth, bodyHeight, callbacks)
     rewardPage:Initialize(catalogWidth, bodyHeight, callbacks.rewardPage)
-    locationPage:Initialize(catalogWidth, bodyHeight, openCategory, callbacks.currentZone)
+    locationPage:Initialize(catalogWidth, bodyHeight, openCategory, callbacks.currentZone, callbacks.playerLevel)
     activeChainsPage:Initialize(catalogWidth, bodyHeight, callbacks.openQuest)
     timeline:Initialize(catalogWidth - detailWidth - panelGap, bodyHeight, {
         back = back, openLocations = openLocations, browseKinds = callbacks.browseKinds,

@@ -1,9 +1,25 @@
 local _, ns = ...
 
-local Controller = {}
-ns.Controller = Controller
+local JournalController = {}
+ns.JournalController = JournalController
 
-local ForeverQuests = ns.ForeverQuests
+local LocationQuestCatalog = ns.LocationQuestCatalog
+
+---@class JournalDependencies
+---@field questRepository QuestRepository
+---@field characterState CharacterQuestState
+---@field mapMetadata MapMetadata
+---@field questSearch QuestSearch
+---@field questChain QuestChain
+---@field questProgress QuestProgress
+---@field locationContext QuestLocationContext
+---@field activeChains ActiveChainsQuery
+---@field describeRequirements fun(quest: QuestSummary, view: QuestChainView): QuestRequirementDescription
+---@field newRewardLoader fun(onUpdate: fun(questId: integer, view: QuestRewardView)): QuestRewardLoader
+---@field buildLocationCatalog fun(yieldWork: fun()): LocationQuestCatalog
+---@field buildRewardCatalog fun(yieldWork: fun()): LocationRewardCatalog?
+---@field schedule fun(delaySeconds: number, callback: function)
+---@field createWindow fun(callbacks: table): table
 
 local function itemInRewards(rewardView, itemId)
     for _, field in ipairs({ rewardView.guaranteed, rewardView.choices }) do
@@ -16,81 +32,55 @@ local function itemInRewards(rewardView, itemId)
     return false
 end
 
-function Controller.New(source)
-    local model = ns.Chain.New(source, function() return ForeverQuests.CharacterFilter(source) end)
+---@param dependencies JournalDependencies
+function JournalController.New(dependencies)
+    local quests = dependencies.questRepository
+    local character = dependencies.characterState
+    local mapMetadata = dependencies.mapMetadata
+    local questProgress = dependencies.questProgress
+    local schedule = dependencies.schedule
     local window, view, selectedId, chainCategory
     local browseIndex, browseBuilding, browsing
     local browse = { kind = "zones", page = 1, offset = 0 }
     local browseStates, rewardStates = {}, {}
     local rewardCatalog, rewardBuilding, rewardState
     local searchResults, searchMessage, searchOffset = {}, "Search by name or quest ID.", 0
-    local player = ForeverQuests.Player()
+    local playerLevel = 0
 
     local function questLogStatus(id)
-        return ns.Chain.QuestLogStatus(id, player)
+        return questProgress:GetLogStatus(id)
+    end
+
+    local function questTitle(id)
+        local prerequisite = quests:GetSummary(id)
+        return prerequisite and prerequisite.title or ("Quest #" .. id)
     end
 
     local function requirementText(quest)
-        local lines = {}
-        local _, reason = model:Status(quest.id, player, view)
-        if reason then
-            lines[#lines + 1] = reason
-        end
-        if quest.minLevel and player.level >= quest.minLevel then
-            lines[#lines + 1] = "Minimum level " .. quest.minLevel
-        end
-        local function questName(id)
-            local prerequisite = model:GetQuest(id)
-            return prerequisite and prerequisite.title or ("Quest #" .. id)
-        end
-        local function addGroup(ids, heading, allowSubstitutes)
-            if #ids == 0 then
-                return
-            end
-            local names = {}
-            for _, id in ipairs(ids) do
-                local name = questName(math.abs(id))
-                local prerequisite = allowSubstitutes and id > 0 and model:GetQuest(id)
-                if prerequisite and #prerequisite.exclusiveTo > 0 then
-                    local options = { name }
-                    for _, alternative in ipairs(prerequisite.exclusiveTo) do
-                        options[#options + 1] = questName(alternative)
-                    end
-                    name = "(" .. table.concat(options, " or ") .. ")"
-                end
-                names[#names + 1] = name
-            end
-            lines[#lines + 1] = heading .. "  /  " .. table.concat(names, ", ")
-        end
-        if view.uncertainIds[quest.id] or (#quest.allOf > 0 and #quest.anyOf > 0) then
-            lines[#lines + 1] = "Some requirements are unclear."
-        end
-        addGroup(quest.allOf, "All required", true)
-        addGroup(quest.anyOf, "Any one required")
-        return #lines > 0 and table.concat(lines, "\n") or nil
+        local _, reason = questProgress:GetStatus(quest.id, view, playerLevel)
+        local minimum = quest.minLevel
+        local satisfiedMinimum = minimum and playerLevel and playerLevel >= minimum and minimum or nil
+        return ns.QuestRequirementsText.Format(
+            dependencies.describeRequirements(quest, view), reason, satisfiedMinimum, questTitle)
     end
 
     local function showDetails(id, rewardView)
         if window and id == selectedId then
-            local quest = model:GetQuest(id)
-            window.questDetails:Render(quest, rewardView, requirementText(quest), ForeverQuests.ReadLogDetails(id))
+            local quest = quests:GetDetails(id)
+            window.questDetails:Render(quest, rewardView, requirementText(quest), character:GetLogDetails(id))
         end
     end
 
-    local rewards = ns.Rewards.New({
-        request = C_QuestLog.RequestLoadQuestByID,
-        after = C_Timer.After,
-        read = ForeverQuests.ReadRewards,
-    }, showDetails)
+    local rewards = dependencies.newRewardLoader(showDetails)
 
     local function refreshChain(scrollToId, newLevel)
         if not view then
             return
         end
-        player.level = newLevel or UnitLevel("player")
+        playerLevel = newLevel or character:GetLevel()
         local statuses = {}
         for _, quest in ipairs(view.quests) do
-            local status, reason = model:Status(quest.id, player, view)
+            local status, reason = questProgress:GetStatus(quest.id, view, playerLevel)
             statuses[quest.id] = { status = status, reason = reason }
         end
         window.timeline:Render(view, selectedId, statuses, scrollToId, chainCategory)
@@ -103,37 +93,13 @@ function Controller.New(source)
         showDetails(id, rewards:Select(id))
     end
 
-    local function categoryForQuest(quest)
-        local classes = source.classes(quest.zoneOrSort, quest.classMask)
-        if #classes == 1 then return { kind = "classes", category = classes[1] } end
-        local dungeon = source.dungeon(quest.areaId)
-        if dungeon then return { kind = "dungeons", category = dungeon } end
-        local zones = source.pickupZones(quest.id)
-        if #zones == 0 then return end
-        if #zones == 1 then return { kind = "zones", category = zones[1] } end
-
-        local byMap = {}
-        for _, zone in ipairs(zones) do byMap[zone.key] = zone end
-        local recorded = byMap[source.zoneMapId(quest.areaId)]
-        if recorded then return { kind = "zones", category = recorded } end
-
-        local mapId, visited = C_Map.GetBestMapForUnit("player"), {}
-        while mapId and mapId > 0 and not visited[mapId] do
-            local current = byMap[mapId]
-            if current then return { kind = "zones", category = current } end
-            visited[mapId] = true
-            mapId = source.zoneParent(mapId)
-        end
-        return { kind = "zones" }
-    end
-
     local function openQuest(id, destination, context)
-        local nextView = model:Build(id, nil, destination)
+        local nextView = dependencies.questChain:Build(id, nil, destination)
         if not nextView then
             return false
         end
         view = nextView
-        chainCategory = context or categoryForQuest(model:GetQuest(id))
+        chainCategory = context or dependencies.locationContext:ForQuest(id)
         window:ShowJournal()
         selectStep(id, id)
         return true
@@ -144,13 +110,12 @@ function Controller.New(source)
             window.activeChains:Render({}, browseBuilding and "Loading active chains..." or "Quest chains unavailable.")
             return
         end
-        local logged = ForeverQuests.ActiveLog(questLogStatus)
-        local groups, count = browseIndex:ActiveChainGroups(logged)
+        local groups, count = dependencies.activeChains:Run(browseIndex)
         window.activeChains:Render(groups, nil, count)
     end
 
     local function search(query)
-        local results = model:Search(query)
+        local results = dependencies.questSearch:Search(query)
         local message
         if #results == 0 then
             message = query:match("^%s*$") and "Enter a quest name or ID." or "No matching quests."
@@ -174,10 +139,10 @@ function Controller.New(source)
         if browseIndex then
             local shortcutKey, shortcutLabel
             if kind == "zones" then
-                local zone = browseIndex:MatchZone(C_Map.GetBestMapForUnit("player"))
+                local zone = browseIndex:MatchZone(mapMetadata:GetPlayerMapId())
                 shortcutKey, shortcutLabel = zone and zone.key, "Current Zone"
             elseif kind == "classes" then
-                local _, token = UnitClass("player")
+                local token = character:GetIdentity().classToken
                 shortcutKey, shortcutLabel = token, "My Class"
             end
             for _, category in ipairs(browseIndex:Categories(kind)) do
@@ -217,7 +182,7 @@ function Controller.New(source)
             local filter = browse.completedFilter
             local rows = browseIndex:Rows(browse.kind, browse.category, filter, questLogStatus)
             local page
-            page, pageNumber, pageCount = ns.Browse.Page(rows, browse.page)
+            page, pageNumber, pageCount = LocationQuestCatalog.Page(rows, browse.page)
             browse.page = pageNumber
             if #rows == 0 then
                 message = filter == "completed" and "No completed quests in this category." or "No matching quests."
@@ -280,17 +245,17 @@ function Controller.New(source)
             if not ok or coroutine.status(work) == "dead" then
                 finish(ok, result)
             else
-                C_Timer.After(0, resume)
+                schedule(0, resume)
             end
         end
-        C_Timer.After(0, resume)
+        schedule(0, resume)
     end
 
     local function loadBrowseIndex()
         if browseIndex or browseBuilding then return end
         browseBuilding = true
         buildIndex(function(yieldWork)
-            return ns.Browse.Build(model, source, yieldWork)
+            return dependencies.buildLocationCatalog(yieldWork)
         end, function(ok, result)
             browseBuilding = false
             if ok then
@@ -333,7 +298,7 @@ function Controller.New(source)
         if not rewardCatalog and not rewardBuilding then
             rewardBuilding = true
             buildIndex(function(yieldWork)
-                return ns.RewardCatalog.Build(source, yieldWork)
+                return dependencies.buildRewardCatalog(yieldWork)
             end, function(ok, result)
                 rewardBuilding = false
                 if ok then
@@ -390,7 +355,7 @@ function Controller.New(source)
 
     local function getWindow()
         if not window then
-            window = ns.Window.New({
+            window = dependencies.createWindow({
                 search = search, openQuest = openQuest, selectStep = selectStep,
                 openJournalRoute = openJournalRoute,
                 categoryName = function(kind, key)
@@ -398,10 +363,10 @@ function Controller.New(source)
                     return category and category.name
                 end,
                 currentZone = function()
-                    return browseIndex and browseIndex:MatchZone(C_Map.GetBestMapForUnit("player"))
+                    return browseIndex and browseIndex:MatchZone(mapMetadata:GetPlayerMapId())
                 end,
                 openClassQuests = function()
-                    local _, token = UnitClass("player")
+                    local token = character:GetIdentity().classToken
                     window:OpenCategory("classes", token)
                 end,
                 openLinkedQuest = function(id) openQuest(id, nil, chainCategory) end,
@@ -410,7 +375,8 @@ function Controller.New(source)
                 end,
                 questLogStatus = questLogStatus,
                 openActiveChains = openActiveChains,
-                partyOnQuest = ForeverQuests.PartyOnQuest,
+                partyOnQuest = function(id) return character:GetPartyMembersOnQuest(id) end,
+                playerLevel = function() return character:GetLevel() end,
                 browseKinds = browseKinds,
                 browseCategory = function() return browse.category end,
                 selectBrowseCategory = function(key)
@@ -461,52 +427,57 @@ function Controller.New(source)
         end
     end
 
-    local partyEvents = {
-        GROUP_ROSTER_UPDATE = true,
-        UNIT_QUEST_LOG_CHANGED = true,
-        PARTY_MEMBER_ENABLE = true,
-        PARTY_MEMBER_DISABLE = true,
-    }
-    function controller:OnEvent(event, id, success)
-        if event == "UNIT_QUEST_LOG_CHANGED" and id == "player" then event = "QUEST_LOG_UPDATE" end
-        if partyEvents[event] then
-            if not window or (event == "UNIT_QUEST_LOG_CHANGED" and not (id and id:match("^party%d+$"))) then
-                return
-            end
-            refreshChain()
-            if not browsing and #searchResults > 0 then
-                window.questList:ShowResults(searchResults, searchMessage, window.questList:Offset())
-            end
-            return
-        elseif event == "QUEST_DATA_LOAD_RESULT" then
-            rewards:OnQuestDataLoaded(id, success)
-        elseif event == "GET_ITEM_INFO_RECEIVED" then
-            if success and selectedId then
-                local rewardView = rewards:Get(selectedId)
-                if itemInRewards(rewardView, id) then
-                    showDetails(selectedId, rewardView)
-                end
-            end
-        elseif event == "PLAYER_LEVEL_UP" then
-            refreshChain(nil, id)
-            rewards:Invalidate()
-        elseif event == "QUEST_ACCEPTED" or event == "QUEST_TURNED_IN" then
-            refreshChain()
-            rewards:Invalidate(id)
-        elseif selectedId then
+    local function refreshSearchResults()
+        if not browsing and #searchResults > 0 then
+            window.questList:ShowResults(searchResults, searchMessage, window.questList:Offset())
+        end
+    end
+
+    local function refreshQuestLists()
+        if not window then return end
+        if window:IsActiveChainsOpen() then showActiveChains() end
+        if browsing and browseIndex and browse.category then
+            showBrowse(window.questList:Offset())
+        else
+            refreshSearchResults()
+        end
+    end
+
+    function controller:OnPartyChanged()
+        if not window then return end
+        refreshChain()
+        refreshSearchResults()
+    end
+
+    function controller:OnQuestDataLoaded(id, success)
+        rewards:OnQuestDataLoaded(id, success)
+    end
+
+    function controller:OnItemDataLoaded(id, success)
+        if not success or not selectedId then return end
+        local rewardView = rewards:Get(selectedId)
+        if itemInRewards(rewardView, id) then
+            showDetails(selectedId, rewardView)
+        end
+    end
+
+    function controller:OnLevelUp(level)
+        refreshChain(nil, level)
+        rewards:Invalidate()
+    end
+
+    function controller:OnQuestProgressChanged(id)
+        refreshChain()
+        rewards:Invalidate(id)
+        refreshQuestLists()
+    end
+
+    function controller:OnQuestLogChanged()
+        if selectedId then
             refreshChain()
             showDetails(selectedId, rewards:Get(selectedId))
         end
-        if not window then return end
-        if event == "QUEST_LOG_UPDATE" or event == "QUEST_ACCEPTED"
-            or event == "QUEST_TURNED_IN" or event == "QUEST_REMOVED" then
-            if window:IsActiveChainsOpen() then showActiveChains() end
-            if browsing and browseIndex and browse.category then
-                showBrowse(window.questList:Offset())
-            elseif not browsing and #searchResults > 0 then
-                window.questList:ShowResults(searchResults, searchMessage, window.questList:Offset())
-            end
-        end
+        refreshQuestLists()
     end
 
     return controller

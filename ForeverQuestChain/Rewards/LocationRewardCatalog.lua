@@ -1,18 +1,23 @@
 local _, ns = ...
 
-local RewardCatalog = {}
-RewardCatalog.__index = RewardCatalog
-ns.RewardCatalog = RewardCatalog
+---@class LocationRewardCatalog
+local LocationRewardCatalog = {}
+LocationRewardCatalog.__index = LocationRewardCatalog
+ns.LocationRewardCatalog = LocationRewardCatalog
 
-function RewardCatalog.Build(source, yieldWork)
-    if not source.itemIds or not source.rewardQuests or not source.rewardItem then
+---@param repository RewardSourceRepository
+---@param yieldWork? fun()
+function LocationRewardCatalog.Build(repository, yieldWork)
+    local itemIds = repository:ListItemIds()
+    if not itemIds then
         return nil
     end
     local byQuest = {}
-    for index, id in ipairs(source.itemIds()) do
-        local questIds = source.rewardQuests(id)
-        if questIds and #questIds > 0 then
-            local item, seen = source.rewardItem(id), {}
+    for index, id in ipairs(itemIds) do
+        local questIds = repository:GetQuestIdsForItem(id)
+        local item = questIds and #questIds > 0 and repository:GetItem(id)
+        if item then
+            local seen = {}
             for _, questId in ipairs(questIds) do
                 if not seen[questId] then
                     local items = byQuest[questId] or {}
@@ -24,16 +29,16 @@ function RewardCatalog.Build(source, yieldWork)
         end
         if yieldWork and index % 200 == 0 then yieldWork() end
     end
-    return setmetatable({ byQuest = byQuest, locations = { zones = {}, dungeons = {} } }, RewardCatalog)
+    return setmetatable({ byQuest = byQuest, locations = { zones = {}, dungeons = {} } }, LocationRewardCatalog)
 end
 
-function RewardCatalog:Search(browse, kind, category, query)
+function LocationRewardCatalog:Search(catalog, kind, category, query)
     local locations = self.locations[kind]
     local results = locations[category]
     if not results then
         local byItem = {}
         results = {}
-        for _, group in ipairs(browse:Groups(kind, category)) do
+        for _, group in ipairs(catalog:Groups(kind, category)) do
             for _, step in ipairs(group.steps) do
                 if kind == "zones" or (step.dungeon and step.dungeon.key == category) then
                     for _, item in ipairs(self.byQuest[step.quest.id] or {}) do

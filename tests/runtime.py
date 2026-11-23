@@ -11,9 +11,22 @@ UI = "{http://www.blizzard.com/wow/ui/}"
 OWN_TEMPLATE = re.compile(r"\bForeverQuestChain\w+Template\b")
 OWN_MIXIN = re.compile(r"\bForeverQuestChain\w+Mixin\b")
 MIXIN_DEFINITION = re.compile(r"^(ForeverQuestChain\w+Mixin)\s*=", re.MULTILINE)
+PROVIDER_API = re.compile(
+    r"\b(?:LibQuestieDB|C_QuestLog|C_Map|C_Item|C_Timer|GetQuestLog\w*|"
+    r"UnitClass|UnitLevel|UnitRace|UnitFactionGroup)\b"
+)
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_feature_code_uses_provider_ports(self):
+        features = ("Quests/", "Locations/", "Progress/", "Rewards/")
+        for path in self.manifest():
+            if path.endswith(".lua") and (path.startswith(features)
+                                          or path == "UI/Journal/JournalController.lua"):
+                with self.subTest(path=path):
+                    source = (ADDON / path).read_text(encoding="utf-8")
+                    self.assertNotRegex(source, PROVIDER_API)
+
     def test_each_view_has_its_own_template_and_mixin(self):
         manifest = self.manifest()
         for component in (

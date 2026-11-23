@@ -1,5 +1,5 @@
 local ns = {}
-assert(loadfile("ForeverQuestChain/Rewards.lua"))("ForeverQuestChain", ns)
+assert(loadfile("ForeverQuestChain/Rewards/QuestRewardLoader.lua"))("ForeverQuestChain", ns)
 
 local requests, timers, delivered = {}, {}, {}
 local readValues = {
@@ -17,18 +17,17 @@ local readValues = {
     },
 }
 local ready = {}
-local rewards = ns.Rewards.New({
-    request = function(id) requests[#requests + 1] = id end,
-    after = function(seconds, callback)
-        assert(seconds == 3)
-        timers[#timers + 1] = callback
-    end,
-    read = function(id, loaded)
+local rewards = ns.QuestRewardLoader.New({
+    Request = function(_, id) requests[#requests + 1] = id end,
+    Read = function(_, id, loaded)
         if loaded or ready[id] then
             return readValues[id]
         end
     end,
-}, function(id, view)
+}, function(seconds, callback)
+    assert(seconds == 3)
+    timers[#timers + 1] = callback
+end, function(id, view)
     assert(view.xp.state ~= "loading")
     delivered[#delivered + 1] = id
 end)

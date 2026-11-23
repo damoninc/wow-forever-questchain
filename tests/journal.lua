@@ -1,5 +1,5 @@
 local ns = {}
-assert(loadfile("ForeverQuestChain/Journal.lua"))("ForeverQuestChain", ns)
+assert(loadfile("ForeverQuestChain/UI/Journal/Journal.lua"))("ForeverQuestChain", ns)
 
 local journal = ns.Journal.New()
 assert(journal.route.tab == "search" and journal.route.page == "search")

@@ -1,9 +1,12 @@
 local _, ns = ...
 
-local Rewards = {}
-Rewards.__index = Rewards
-ns.Rewards = Rewards
+---@class QuestRewardLoader
+local QuestRewardLoader = {}
+QuestRewardLoader.__index = QuestRewardLoader
+ns.QuestRewardLoader = QuestRewardLoader
 
+---@param state QuestRewardState
+---@return QuestRewardView
 local function emptyView(state)
     return {
         xp = { state = state },
@@ -13,21 +16,27 @@ local function emptyView(state)
     }
 end
 
-function Rewards.New(api, onUpdate)
+---@param gateway QuestRewardGateway
+---@param schedule fun(delaySeconds: number, callback: fun())
+---@param onUpdate fun(questId: integer, view: QuestRewardView)
+---@return QuestRewardLoader
+function QuestRewardLoader.New(gateway, schedule, onUpdate)
     return setmetatable({
-        api = api,
+        gateway = gateway,
+        schedule = schedule,
         onUpdate = onUpdate,
         cache = {},
         pending = {},
-    }, Rewards)
+    }, QuestRewardLoader)
 end
 
-function Rewards:Get(id)
+function QuestRewardLoader:Get(id)
     local entry = self.cache[id]
     return entry and entry.view or emptyView("unavailable")
 end
 
-function Rewards:Finish(id, view, retry)
+---@private
+function QuestRewardLoader:Finish(id, view, retry)
     self.pending[id] = nil
     self.cache[id] = { view = view, retry = retry }
     if self.selected == id then
@@ -35,14 +44,14 @@ function Rewards:Finish(id, view, retry)
     end
 end
 
-function Rewards:Select(id)
+function QuestRewardLoader:Select(id)
     self.selected = id
     local cached = self.cache[id]
     if cached and not cached.retry then
         return cached.view
     end
 
-    local ready = self.api.read(id, false)
+    local ready = self.gateway:Read(id, false)
     if ready then
         self.cache[id] = { view = ready }
         return ready
@@ -51,25 +60,25 @@ function Rewards:Select(id)
     local request = {}
     self.pending[id] = request
     self.cache[id] = { view = emptyView("loading") }
-    self.api.after(3, function()
+    self.schedule(3, function()
         if self.pending[id] == request then
-            local result = self.api.read(id, false)
+            local result = self.gateway:Read(id, false)
             self:Finish(id, result or emptyView("unavailable"), not result)
         end
     end)
-    self.api.request(id)
+    self.gateway:Request(id)
     return self:Get(id)
 end
 
-function Rewards:OnQuestDataLoaded(id, success)
+function QuestRewardLoader:OnQuestDataLoaded(id, success)
     if not self.pending[id] then
         return
     end
-    local result = success and self.api.read(id, true)
+    local result = success and self.gateway:Read(id, true)
     self:Finish(id, result or emptyView("unavailable"), not result)
 end
 
-function Rewards:Invalidate(id)
+function QuestRewardLoader:Invalidate(id)
     if id then
         self.cache[id], self.pending[id] = nil, nil
     else
