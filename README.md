@@ -8,7 +8,7 @@ QuestChain is an in-game quest-chain reference for **WoW: Forever**. Look up a q
 2. Download the installable ZIP from [GitHub Releases](https://github.com/damoninc/wow-forever-questchain/releases) and extract it into your Forever client's `Interface/AddOns` directory. The ZIP contains the `ForeverQuestChain` folder. For a source checkout, copy that folder from this repository instead.
 3. Enable **QuestChain** in the AddOns list. Click the book icon by the minimap or run `/questchain` in chat. Drag the icon to move it. If the new addon is absent from the AddOns list, restart the client.
 
-The journal has five main tabs: **Search**, **Zones**, **Dungeons**, **Class Quests**, and **Active Chains**. Search by title or quest ID, or choose a location card to explore its **Quests** and **Rewards** sections. Location cards sort by level and offer name and level filters. **Current Zone** opens the quests for your current location.
+The journal's right edge has five icon tabs: **Search**, **Zones**, **Dungeons**, **Class Quests**, and **Active Chains**. Hover a tab to see its name. Search by title or quest ID, or choose a location card to explore its **Quests** and **Rewards** sections. Location cards sort by level and offer name and level filters. **Current Zone** opens the quests for your current location.
 
 Location cards use Blizzard's journal borders and title styling. Classic dungeons use the client's journal thumbnails, and zones use the client's map tiles. Locations without available artwork use parchment. Hover a card to see its chain and standalone quest counts.
 

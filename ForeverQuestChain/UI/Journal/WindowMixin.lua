@@ -7,7 +7,7 @@ local Widgets = ns.Widgets
 
 function WindowMixin.Initialize(frame, callbacks)
     local minWidth, minHeight = 860, 460
-    local bodyTop, bodyBottom, sideMargin, panelGap = 56, 53, 14, 10
+    local bodyTop, bodyBottom, sideMargin, panelGap = 56, 28, 14, 10
     local detailWidth = 312
     local defaultWidth, defaultHeight = frame:GetSize()
     frame:SetTitle("QuestChain")
@@ -26,10 +26,15 @@ function WindowMixin.Initialize(frame, callbacks)
     grip:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
     frame:HookScript("OnHide", function() frame:StopMovingOrSizing() end)
 
-    local footer = frame.JournalTabs
-    footer.minTabWidth = 92
-    footer.Tabs = { footer.Search, footer.Zones, footer.Dungeons, footer.Classes, footer.ActiveChains }
-    PanelTemplates_SetNumTabs(footer, #footer.Tabs)
+    local side = frame.JournalTabs
+    local tabs = {
+        search = side.Search, zones = side.Zones, dungeons = side.Dungeons,
+        classes = side.Classes, activeChains = side.ActiveChains,
+    }
+    local sideWidth = side.Search:GetWidth()
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", UIParent, "CENTER", -sideWidth / 2, 0)
+    frame:SetClampRectInsets(0, sideWidth, 0, 0)
 
     local catalogWidth, bodyHeight = defaultWidth - 2 * sideMargin, defaultHeight - bodyTop - bodyBottom
     local window = frame
@@ -50,9 +55,6 @@ function WindowMixin.Initialize(frame, callbacks)
     questDetails:Initialize(detailWidth, bodyHeight, back)
 
     local journal = ns.Journal.New(callbacks.playerClass)
-    local tabs = { "search", "zones", "dungeons", "classes", "activeChains" }
-    local tabIndex = {}
-    for index, tab in ipairs(tabs) do tabIndex[tab] = index end
     local locationNav = frame.LocationNav
     local home, locationTitle = locationNav.Home, locationNav.Heading
     local questsSection, rewardsSection = locationNav.Quests, locationNav.Rewards
@@ -86,7 +88,7 @@ function WindowMixin.Initialize(frame, callbacks)
             questsSection:SetShown(route.kind ~= "classes")
         end
         rewardPage:ClearFocus()
-        PanelTemplates_SetTab(footer, tabIndex[route.tab])
+        for key, tab in pairs(tabs) do tab:SetChecked(key == route.tab) end
         questList:UpdateFocus(frame:IsShown())
     end
 
@@ -132,9 +134,16 @@ function WindowMixin.Initialize(frame, callbacks)
         showPage()
     end
 
-    for index, tab in ipairs(tabs) do
-        footer.Tabs[index]:SetScript("OnClick", function()
-            if tab == "search" then journal:OpenSearch() else journal:SelectTab(tab) end
+    for key, tab in pairs(tabs) do
+        if tab.iconAtlas then
+            tab.Icon:SetAtlas(tab.iconAtlas)
+            tab.Icon:SetSize(40, 40)
+        else
+            tab.Icon:SetTexture(tab.iconTexture)
+        end
+        tab:SetCustomOnMouseUpHandler(function(_, button, upInside)
+            if button ~= "LeftButton" or not upInside then return end
+            if key == "search" then journal:OpenSearch() else journal:SelectTab(key) end
             navigate()
         end)
     end
@@ -143,8 +152,9 @@ function WindowMixin.Initialize(frame, callbacks)
     function window:ShowJournal()
         if not frame:IsShown() then
             local screenWidth, screenHeight = UIParent:GetWidth(), UIParent:GetHeight()
-            local scale = math.min(1, screenWidth / (defaultWidth + 20), screenHeight / (defaultHeight + 20))
-            local maxWidth = math.floor(screenWidth / scale + 0.5) - 20
+            local widthPadding = sideWidth + 20
+            local scale = math.min(1, screenWidth / (defaultWidth + widthPadding), screenHeight / (defaultHeight + 20))
+            local maxWidth = math.floor(screenWidth / scale + 0.5) - widthPadding
             local maxHeight = math.floor(screenHeight / scale + 0.5) - 20
             frame:SetScale(scale)
             frame:SetResizeBounds(minWidth, minHeight, maxWidth, maxHeight)
