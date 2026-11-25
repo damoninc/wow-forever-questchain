@@ -147,7 +147,8 @@ end
 
 ---@param locationRepository QuestLocationRepository
 ---@param mapMetadata MapMetadata
-function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata, yieldWork)
+---@param playerClass? string
+function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata, yieldWork, playerClass)
     local quests, neighbors = questIndex:Catalog(yieldWork)
     local ids = {}
     for id in pairs(quests) do ids[#ids + 1] = id end
@@ -155,6 +156,7 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
     local nodes = groupQuests(questIndex, quests, neighbors, ids)
     local byKind = { zones = {}, dungeons = {}, classes = {} }
     local steps, levelsByKind = {}, { zones = {}, dungeons = {} }
+    local excludedDungeonQuests, eligibleDungeonsByChain = {}, {}
     local function add(kind, category, step, chain)
         local index = byKind[kind]
         local bucket = index[category.key]
@@ -196,22 +198,32 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
         steps[id] = step
         chain.steps[#chain.steps + 1] = step
         for _, category in ipairs(zones) do add("zones", category, step, chain) end
+        local classes = locationRepository:GetClassCategories(id)
+        local matchesClass = not playerClass or #classes == 0
+        for _, category in ipairs(classes) do
+            add("classes", category, step, chain)
+            matchesClass = matchesClass or category.key == playerClass
+        end
+        if not matchesClass then excludedDungeonQuests[id] = true end
         if dungeon then
             chain.dungeons = chain.dungeons or {}
             chain.dungeons[dungeon.key] = dungeon
-        end
-        for _, category in ipairs(locationRepository:GetClassCategories(id)) do
-            add("classes", category, step, chain)
+            if matchesClass then
+                local eligibleDungeons = eligibleDungeonsByChain[chain.key] or {}
+                eligibleDungeons[dungeon.key] = dungeon
+                eligibleDungeonsByChain[chain.key] = eligibleDungeons
+            end
         end
         if yieldWork and index % 80 == 0 then yieldWork() end
     end
-    -- A verified dungeon quest anchors the group. Show the rest of that
-    -- chain as context without giving those quests a new dungeon assignment.
+    -- A verified dungeon quest available to the player class anchors the group.
+    -- Other eligible steps can provide context outside the dungeon.
     for index, id in ipairs(ids) do
         local step = steps[id]
         local chain = step.chain
-        if chain.dungeons then
-            for _, dungeon in pairs(chain.dungeons) do add("dungeons", dungeon, step, chain) end
+        local dungeons = eligibleDungeonsByChain[chain.key]
+        if dungeons and not excludedDungeonQuests[id] then
+            for _, dungeon in pairs(dungeons) do add("dungeons", dungeon, step, chain) end
         end
         if yieldWork and index % 80 == 0 then yieldWork() end
     end
@@ -225,7 +237,9 @@ function LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata,
             if not bucket.minLevel then bucket.minLevel, bucket.maxLevel = low, high end
         end
     end
-    return setmetatable({ byKind = byKind, mapMetadata = mapMetadata, steps = steps }, LocationQuestCatalog)
+    return setmetatable({
+        byKind = byKind, mapMetadata = mapMetadata, steps = steps, excludedDungeonQuests = excludedDungeonQuests,
+    }, LocationQuestCatalog)
 end
 
 local function byName(left, right)
@@ -261,15 +275,18 @@ function LocationQuestCatalog:Groups(kind, key)
     local category = self:Category(kind, key)
     if not category then return {} end
     if not category.sorted then
-        table.sort(category.groups, function(a, b)
-            return groupByLevel(a, b, a.level, b.level)
-        end)
         for _, group in ipairs(category.groups) do
             table.sort(group.steps, function(a, b)
                 if a.order == b.order then return a.quest.id < b.quest.id end
                 return a.order < b.order
             end)
+            if kind == "dungeons" and not self:IsDungeonQuestVisible(group.chain.start or group.key) then
+                group.title = group.steps[1].quest.title
+            end
         end
+        table.sort(category.groups, function(a, b)
+            return groupByLevel(a, b, a.level, b.level)
+        end)
         category.sorted = true
     end
     return category.groups
@@ -283,12 +300,17 @@ function LocationQuestCatalog:GetStep(questId)
     return self.steps[questId]
 end
 
+function LocationQuestCatalog:IsDungeonQuestVisible(questId)
+    return not self.excludedDungeonQuests[questId]
+end
+
 function LocationQuestCatalog:Rows(kind, key, filter, getStatus, showOutliers)
     local rows, standalone = {}, {}
     local category = self:Category(kind, key)
     if not category then return rows end
     local low = not showOutliers and category.typicalMinLevel
     local high = category.typicalMaxLevel
+    local excluded = kind == "dungeons" and self.excludedDungeonQuests or nil
     local statuses = {}
     local function statusOf(id)
         if not statuses[id] then statuses[id] = getStatus(id) or "unstarted" end
@@ -297,7 +319,7 @@ function LocationQuestCatalog:Rows(kind, key, filter, getStatus, showOutliers)
     for _, group in ipairs(self:Groups(kind, key)) do
         local chainStatus
         if not group.standalone then
-            chainStatus = QuestProgress.ChainStatus(group.chain, statusOf)
+            chainStatus = QuestProgress.ChainStatus(group.chain, statusOf, excluded)
         end
         local selected, selectedStatus, priority = nil, nil, 0
         local firstVisible, visibleLevel

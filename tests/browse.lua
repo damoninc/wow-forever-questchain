@@ -422,4 +422,44 @@ assert(rangeRow("dungeons", 1, nil, readyOutlier).step.quest.id == prep,
     "A dungeon preparation step remains visible even when the dungeon step is an outlier")
 assert(rangeRow("dungeons", 1, nil, readyOutlier, true).step.quest.id == depthQuest,
     "Show outliers lets the ready dungeon step be selected")
+
+records[121] = quest("Temple Warrior Quest", { zoneOrSort = 1477, requiredClasses = 1, parentQuest = 95 })
+records[122] = quest("Temple Shared Class Quest", { zoneOrSort = 1477, requiredClasses = 129 })
+records[123] = quest("Stockade Paladin Quest", { zoneOrSort = 717, requiredClasses = 2, nextQuestInChain = 124 })
+records[124] = quest("Stockade Follow-up")
+
+local mage = { GetIdentity = function() return { classToken = "MAGE" } end }
+local mageIndex = ns.QuestIndex.New(quests, mage)
+local mageCatalog = ns.LocationQuestCatalog.Build(mageIndex, locations, maps, nil, mage:GetIdentity().classToken)
+local mageTemple = mageCatalog:Groups("dungeons", 1477)
+local templeChain = groupWith(mageTemple, 95)
+assert(templeChain and #templeChain.steps == 2 and templeChain.steps[1].quest.id == 95
+    and templeChain.steps[2].quest.id == 96,
+    "The temple chain shows the unrestricted lead-in and mage step while hiding the warrior branch")
+assert(groupWith(mageTemple, 122), "A quest with a matching class in a multi-class mask stays visible")
+local mageTempleRows = mageCatalog:Rows("dungeons", 1477, "completed", function(id)
+    return (id == 95 or id == 96) and "completed" or nil
+end)
+assert(#mageTempleRows == 1 and mageTempleRows[1].status == "completed",
+    "An unavailable class branch does not keep a finished dungeon chain active")
+local mageStockade = mageCatalog:Groups("dungeons", 717)
+assert(#mageStockade == 1 and groupWith(mageStockade, 94),
+    "Other dungeons retain general quests and exclude chains anchored only by another class")
+assert(groupWith(mageCatalog:Groups("classes", "PALADIN"), 123),
+    "The Class Quests picker can still browse another class")
+
+local templeRewards = ns.LocationRewardCatalog.Build({
+    ListItemIds = function() return { 100 } end,
+    GetQuestIdsForItem = function() return { 96, 121, 122 } end,
+    GetItem = function() return { id = 100, name = "Temple Reward" } end,
+}):Search(mageCatalog, "dungeons", 1477, "")
+assert(#templeRewards == 1 and #templeRewards[1].sources == 2,
+    "Dungeon reward sources only include verified quests available to the player class")
+
+local mageChain = ns.QuestChain.New(mageIndex):Build(95, nil, nil, function(id)
+    return mageCatalog:IsDungeonQuestVisible(id)
+end)
+assert(#mageChain.quests == 2 and mageChain.quests[1].id == 95 and mageChain.quests[2].id == 96,
+    "The dungeon timeline hides another class's linked branch")
+
 print("browse tests passed")

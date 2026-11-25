@@ -48,11 +48,12 @@ local function otherEnd(edge, id)
     return edge.fromId
 end
 
-local function breadcrumbDestination(edges, focusId, visible)
+local function breadcrumbDestination(edges, focusId, visible, isVisible)
     local destination
     for _, edge in ipairs(edges or {}) do
         local target = edge.toId
-        if edge.kind == "breadcrumb" and edge.fromId == focusId and target ~= focusId and visible[target] then
+        if edge.kind == "breadcrumb" and edge.fromId == focusId and target ~= focusId and visible[target]
+            and (not isVisible or isVisible(target)) then
             if destination and destination ~= target then return nil end
             destination = target
         end
@@ -63,15 +64,19 @@ end
 ---@param focusId number
 ---@param limit? number
 ---@param destination? number
+---@param isVisible? fun(questId: number): boolean
 ---@return QuestChainView?
-function QuestChain:Build(focusId, limit, destination)
+function QuestChain:Build(focusId, limit, destination, isVisible)
     local questIndex = self.index
     local visible, neighbors = questIndex:Catalog()
-    if not visible[focusId] then
+    if not visible[focusId] or (isVisible and not isVisible(focusId)) then
         return nil
     end
+    if destination and isVisible and not isVisible(destination) then
+        destination = nil
+    end
     limit = math.max(1, limit or 100)
-    local leadInDestination = not destination and breadcrumbDestination(neighbors[focusId], focusId, visible)
+    local leadInDestination = not destination and breadcrumbDestination(neighbors[focusId], focusId, visible, isVisible)
 
     local included = { [focusId] = true }
     local queue, adjacent, omitted, missing = { focusId }, {}, {}, {}
@@ -83,7 +88,7 @@ function QuestChain:Build(focusId, limit, destination)
             local other = otherEnd(edge, id)
             if not questIndex:Get(other) then
                 missing[other] = true
-            elseif not included[other] then
+            elseif not included[other] and (not isVisible or isVisible(other)) then
                 local optional = edge.kind == "breadcrumb" or edge.kind == "substitute"
                 local followOptional = id == focusId and id == edge.fromId
                     and (other == destination or other == leadInDestination or (not destination and edge.kind == "substitute"))
