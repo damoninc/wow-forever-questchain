@@ -1,13 +1,14 @@
 local ns = {}
 local handlers, registered, requests = {}, {}, {}
-local onEvent, callbacks, details, statuses, results
+local onEvent, callbacks, details, statuses, results, browseEntries
 local runTimers, showOutliers
 local timers, catalogReads, starterReads = {}, 0, 0
 local completed = {}
 local function noop() end
 local quests = {
-    [11] = { name = "First step", nextQuestInChain = 12 },
+    [11] = { name = "First step", nextQuestInChain = 12, zoneOrSort = 1584 },
     [12] = { name = "Next step", preQuestSingle = { 11 } },
+    [13] = { name = "Mage branch", parentQuest = 11, requiredClasses = 128 },
 }
 
 SlashCmdList = {}
@@ -31,6 +32,7 @@ function CreateFrame()
     }
 end
 function UnitLevel() return 30 end
+function UnitClass() return "Warrior", "WARRIOR" end
 function IsLoggedIn() return false end
 function HaveQuestRewardData() return false end
 function GetQuestLogRewardXP(id) return id * 10 end
@@ -44,7 +46,7 @@ LibQuestieDB = {
     Quest = {
         GetAllIds = function()
             catalogReads = catalogReads + 1
-            return { 11, 12 }
+            return { 11, 12, 13 }
         end,
         Exists = function(id) return quests[id] ~= nil end,
         GetAll = function(id, keys)
@@ -72,7 +74,7 @@ ns.Window = { New = function(actions)
             SetBrowseCategories = noop,
             SetCompletedFilter = noop,
             SetShowOutliers = function(_, shown) showOutliers = shown == true end,
-            ShowBrowse = noop,
+            ShowBrowse = function(_, entries) browseEntries = entries end,
         },
         timeline = { Render = function(_, _, _, progress) statuses = progress end },
         questDetails = { Render = function(_, quest, rewards, requirements)
@@ -102,7 +104,7 @@ emit("PLAYER_LOGIN")
 emit("PLAYER_LOGIN")
 assert(#timers == 1 and catalogReads == 0, "Login queues one background build")
 table.remove(timers, 1)()
-assert(catalogReads == 1 and starterReads == 2 and callbacks == nil,
+assert(catalogReads == 1 and starterReads == 3 and callbacks == nil,
     "Build the quest and location indexes before creating the journal window")
 handlers.MENU_QUEST_MAP_LOG_TITLE({ questID = 11 }, {
     CreateButton = function(_, _, click) click() end,
@@ -129,6 +131,7 @@ assert(statuses[12].status == "completed" and requests[3] == 12)
 callbacks.search("11")
 assert(#results == 1 and results[1].id == 11)
 assert(details.id == 11 and details.xp.value == 110)
+assert(statuses[13], "A timeline opened from Search can show other-class context")
 
 runTimers = true
 local zoneRoute = { page = "quests", kind = "zones", key = 0 }
@@ -138,6 +141,10 @@ assert(not showOutliers, "Outliers are hidden when first opening zone quests")
 callbacks.setShowOutliers(true)
 callbacks.openJournalRoute(dungeonRoute)
 assert(not showOutliers, "The zone toggle should not change the dungeon toggle")
+assert(#browseEntries == 1, "The dungeon has one applicable chain")
+browseEntries[1].action()
+assert(statuses[11] and statuses[12] and not statuses[13],
+    "Opening a chain from the dungeon applies the player's class to its timeline")
 callbacks.openJournalRoute(zoneRoute)
 assert(showOutliers, "Return to the zone with its outlier preference intact")
 assert(catalogReads == 1, "Browsing reuses the startup index")

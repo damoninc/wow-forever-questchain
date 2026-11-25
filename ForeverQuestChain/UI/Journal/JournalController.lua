@@ -94,7 +94,11 @@ function JournalController.New(dependencies)
     end
 
     local function openQuest(id, destination, context)
-        local nextView = dependencies.questChain:Build(id, nil, destination)
+        local isVisible
+        if context and context.kind == "dungeons" and browseIndex then
+            isVisible = function(questId) return browseIndex:IsDungeonQuestVisible(questId) end
+        end
+        local nextView = dependencies.questChain:Build(id, nil, destination, isVisible)
         if not nextView then
             return false
         end

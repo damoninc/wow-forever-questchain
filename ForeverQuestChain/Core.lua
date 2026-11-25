@@ -32,7 +32,8 @@ local controller = ns.JournalController.New({
     activeChains = ns.ActiveChainsQuery.New(characterState, questProgress),
     describeRequirements = function(quest, view) return ns.QuestRequirements.Describe(quest, view, questIndex) end,
     buildLocationCatalog = function(yieldWork)
-        return ns.LocationQuestCatalog.Build(questIndex, locationRepository, mapMetadata, yieldWork)
+        return ns.LocationQuestCatalog.Build(
+            questIndex, locationRepository, mapMetadata, yieldWork, characterState:GetIdentity().classToken)
     end,
     buildRewardCatalog = function(yieldWork) return ns.LocationRewardCatalog.Build(rewardSources, yieldWork) end,
     newRewardLoader = function(onUpdate) return ns.QuestRewardLoader.New(rewardGateway, schedule, onUpdate) end,

@@ -25,16 +25,19 @@ QuestProgress.SelectionPriority = { ready = 4, active = 3, unstarted = 2, comple
 
 ---@param chain QuestChainProgress
 ---@param getStatus fun(questId: number): QuestLogStatus|"unstarted"
+---@param excluded? table<number, boolean> Quests unavailable in the current view.
 ---@return "completed"|"active"|"unstarted"
-function QuestProgress.ChainStatus(chain, getStatus)
+function QuestProgress.ChainStatus(chain, getStatus, excluded)
     local completed, skipped, started = {}, {}, false
     for _, step in ipairs(chain.steps) do
         local quest = step.quest
-        local status = getStatus(quest.id)
-        started = started or status ~= "unstarted"
-        if status == "completed" then
-            completed[quest.id] = true
-            for _, other in ipairs(quest.exclusiveTo or {}) do skipped[other] = true end
+        if not (excluded and excluded[quest.id]) then
+            local status = getStatus(quest.id)
+            started = started or status ~= "unstarted"
+            if status == "completed" then
+                completed[quest.id] = true
+                for _, other in ipairs(quest.exclusiveTo or {}) do skipped[other] = true end
+            end
         end
     end
     if not started then return "unstarted" end
@@ -46,6 +49,7 @@ function QuestProgress.ChainStatus(chain, getStatus)
     end
 
     local function isSkipped(id)
+        if excluded and excluded[id] then return true end
         local status = getStatus(id)
         if status ~= "unstarted" then return false end
         if skipped[id] ~= nil then return skipped[id] end
